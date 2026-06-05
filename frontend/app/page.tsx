@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch, getCsrfCookie } from "@/lib/api";
 
@@ -15,21 +15,9 @@ interface Board {
 }
 
 const PRESET_COLORS = [
-  "#ef4444",
-  "#f97316",
-  "#eab308",
-  "#84cc16",
-  "#22c55e",
-  "#14b8a6",
-  "#06b6d4",
-  "#3b82f6",
-  "#6366f1",
-  "#8b5cf6",
-  "#a855f7",
-  "#d946ef",
-  "#f43f5e",
-  "#64748b",
-  "#18181b",
+  "#ef4444", "#f97316", "#eab308", "#84cc16", "#22c55e",
+  "#14b8a6", "#06b6d4", "#3b82f6", "#6366f1", "#8b5cf6",
+  "#a855f7", "#d946ef", "#f43f5e", "#64748b", "#18181b",
 ];
 
 export default function Home() {
@@ -43,16 +31,17 @@ export default function Home() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
   useEffect(() => {
-    startTransition(async () => {
+    let cancelled = false;
+    (async () => {
       try {
         await getCsrfCookie();
         const data = await apiFetch("/api/boards");
-        setBoards(data);
+        if (!cancelled) setBoards(data);
       } catch (err) {
+        if (cancelled) return;
         const message = err instanceof Error ? err.message : "Failed to load boards";
         if (message.includes("401") || message.includes("Unauthenticated")) {
           router.push("/login");
@@ -60,16 +49,16 @@ export default function Home() {
           setError(message);
         }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
-    });
+    })();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!newBoardName.trim()) return;
-
     setCreating(true);
     try {
       await apiFetch("/api/boards", {
@@ -79,10 +68,10 @@ export default function Home() {
           background_color: selectedColor,
         }),
       });
-      setNewBoardName("");
-      setShowCreate(false);
       const data = await apiFetch("/api/boards");
       setBoards(data);
+      setNewBoardName("");
+      setShowCreate(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create board");
     } finally {
@@ -91,19 +80,15 @@ export default function Home() {
   }
 
   async function handleRename(boardId: number) {
-    if (!editName.trim()) {
-      setEditingId(null);
-      return;
-    }
-
+    if (!editName.trim()) { setEditingId(null); return; }
     try {
       await apiFetch(`/api/boards/${boardId}`, {
         method: "PUT",
         body: JSON.stringify({ name: editName.trim() }),
       });
-      setEditingId(null);
       const data = await apiFetch("/api/boards");
       setBoards(data);
+      setEditingId(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to rename board");
     }
@@ -112,9 +97,7 @@ export default function Home() {
   async function handleDelete(boardId: number) {
     setDeletingId(boardId);
     try {
-      await apiFetch(`/api/boards/${boardId}`, {
-        method: "DELETE",
-      });
+      await apiFetch(`/api/boards/${boardId}`, { method: "DELETE" });
       const data = await apiFetch("/api/boards");
       setBoards(data);
     } catch (err) {
@@ -125,102 +108,119 @@ export default function Home() {
   }
 
   async function handleLogout() {
-    try {
-      await apiFetch("/logout", { method: "POST" });
-    } catch {
-      // ignore
-    }
+    try { await apiFetch("/logout", { method: "POST" }); } catch { /* ignore */ }
     router.push("/login");
   }
 
   return (
-    <div className="min-h-full bg-zinc-50 dark:bg-black">
-      <header className="border-b border-zinc-200 bg-white px-6 py-4 dark:border-zinc-800 dark:bg-zinc-950">
-        <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <h1 className="text-xl font-bold text-zinc-900 dark:text-white">Boards</h1>
+    <div className="min-h-screen bg-zinc-950 text-white">
+      <nav className="sticky top-0 z-40 border-b border-white/10 bg-zinc-950/80 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+            </div>
+            <span className="text-lg font-bold tracking-tight">Trello Clone</span>
+          </div>
           <button
             onClick={handleLogout}
-            className="rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white"
+            className="rounded-xl px-4 py-2 text-sm font-semibold text-zinc-400 transition-all hover:bg-white/10 hover:text-white"
           >
             Log out
           </button>
         </div>
-      </header>
+      </nav>
 
-      <main className="mx-auto max-w-6xl px-6 py-8">
+      <main className="mx-auto max-w-7xl px-6 py-10">
         {error && (
-          <div className="mb-6 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
+          <div className="mb-6 flex items-center gap-2 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-400 ring-1 ring-red-500/20">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>
             {error}
           </div>
         )}
 
-        <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-200">Your boards</h2>
+        <div className="mb-8 flex items-end justify-between">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">Your boards</h2>
+            <p className="mt-1 text-sm text-zinc-500">Manage your projects and tasks</p>
+          </div>
           <button
-            onClick={() => {
-              setShowCreate(!showCreate);
-              setError("");
-            }}
-            className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+            onClick={() => { setShowCreate(!showCreate); setError(""); }}
+            className="flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/20 transition-all hover:bg-blue-500 hover:shadow-blue-500/30 active:scale-[0.97]"
           >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
             {showCreate ? "Cancel" : "Create board"}
           </button>
         </div>
 
         {showCreate && (
-          <form onSubmit={handleCreate} className="mb-8 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
-            <h3 className="mb-4 text-sm font-semibold text-zinc-800 dark:text-zinc-200">Create new board</h3>
-            <div className="mb-4">
-              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Name</label>
+          <form onSubmit={handleCreate} className="mb-10 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur-xl">
+            <h3 className="mb-5 text-sm font-bold uppercase tracking-wider text-zinc-400">New board</h3>
+            <div className="mb-5">
+              <label className="mb-2 block text-xs font-semibold text-zinc-400">Board name</label>
               <input
                 type="text"
                 value={newBoardName}
                 onChange={(e) => setNewBoardName(e.target.value)}
-                placeholder="Board name"
+                placeholder="e.g. Marketing Q3"
                 autoFocus
-                className="block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                className="w-full rounded-2xl border border-white/10 bg-zinc-900 px-4 py-3 text-sm font-medium text-white placeholder-zinc-600 outline-none ring-2 ring-transparent transition-all focus:border-blue-500/50 focus:ring-blue-500/20"
               />
             </div>
-            <div className="mb-4">
-              <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Background color</label>
-              <div className="flex flex-wrap gap-2">
+            <div className="mb-6">
+              <label className="mb-3 block text-xs font-semibold text-zinc-400">Background</label>
+              <div className="flex flex-wrap gap-3">
                 {PRESET_COLORS.map((color) => (
                   <button
                     key={color}
                     type="button"
                     onClick={() => setSelectedColor(color)}
-                    className={`h-8 w-8 rounded-full border-2 transition-transform hover:scale-110 ${selectedColor === color ? "border-zinc-900 dark:border-white" : "border-transparent"}`}
+                    className={`relative h-10 w-10 rounded-xl transition-all hover:scale-110 ${selectedColor === color ? "ring-2 ring-white ring-offset-2 ring-offset-zinc-950" : ""}`}
                     style={{ backgroundColor: color }}
                     aria-label={`Select color ${color}`}
-                  />
+                  >
+                    {selectedColor === color && (
+                      <svg className="absolute inset-0 m-auto text-white" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                    )}
+                  </button>
                 ))}
               </div>
             </div>
             <button
               type="submit"
               disabled={creating || !newBoardName.trim()}
-              className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+              className="flex items-center gap-2 rounded-2xl bg-white px-6 py-3 text-sm font-bold text-zinc-900 transition-all hover:bg-zinc-200 active:scale-[0.97] disabled:opacity-40"
             >
               {creating ? "Creating..." : "Create board"}
             </button>
           </form>
         )}
 
-        {loading || isPending ? (
-          <div className="text-sm text-zinc-500 dark:text-zinc-400">Loading boards...</div>
+        {loading ? (
+          <div className="flex items-center gap-3 text-zinc-500">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-700 border-t-zinc-400" />
+            Loading boards...
+          </div>
         ) : boards.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-zinc-300 bg-white py-12 text-center dark:border-zinc-800 dark:bg-zinc-950">
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">No boards yet. Create your first board to get started.</p>
+          <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-zinc-800 py-20">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-900">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-600"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+            </div>
+            <p className="text-sm font-medium text-zinc-400">No boards yet</p>
+            <p className="mt-1 text-xs text-zinc-600">Create your first board to get started</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {boards.map((board) => (
               <div
                 key={board.id}
-                className="group relative flex flex-col justify-between rounded-xl p-5 transition-shadow hover:shadow-lg"
+                className="group relative overflow-hidden rounded-3xl transition-all hover:-translate-y-1 hover:shadow-2xl"
                 style={{ backgroundColor: board.background_color || "#3b82f6" }}
               >
-                <div className="mb-8">
+                <div
+                  onClick={() => router.push(`/boards/${board.id}`)}
+                  className="cursor-pointer p-6 pb-16"
+                >
                   {editingId === board.id ? (
                     <input
                       type="text"
@@ -231,45 +231,49 @@ export default function Home() {
                         if (e.key === "Enter") handleRename(board.id);
                         if (e.key === "Escape") setEditingId(null);
                       }}
+                      onClick={(e) => e.stopPropagation()}
                       autoFocus
-                      className="w-full rounded border border-white/30 bg-white/20 px-2 py-1 text-lg font-semibold text-white placeholder-white/70 outline-none backdrop-blur-sm"
+                      className="w-full rounded-xl border border-white/20 bg-black/20 px-3 py-2 text-lg font-bold text-white placeholder-white/40 outline-none backdrop-blur-md"
                     />
                   ) : (
                     <h3
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         setEditingId(board.id);
                         setEditName(board.name);
                       }}
-                      className="cursor-text text-lg font-semibold text-white"
+                      className="cursor-text text-lg font-bold text-white drop-shadow-md"
                       title="Click to rename"
                     >
                       {board.name}
                     </h3>
                   )}
+                  <p className="mt-1.5 text-xs font-medium text-white/70">
+                    {new Date(board.created_at).toLocaleDateString()}
+                  </p>
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-white/80">
-                    {new Date(board.created_at).toLocaleDateString()}
-                  </span>
-                  <div className="flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                    <button
-                      onClick={() => {
-                        setEditingId(board.id);
-                        setEditName(board.name);
-                      }}
-                      className="rounded-md bg-white/20 px-2 py-1 text-xs font-medium text-white backdrop-blur-sm transition-colors hover:bg-white/30"
-                    >
-                      Rename
-                    </button>
-                    <button
-                      onClick={() => handleDelete(board.id)}
-                      disabled={deletingId === board.id}
-                      className="rounded-md bg-white/20 px-2 py-1 text-xs font-medium text-white backdrop-blur-sm transition-colors hover:bg-red-500/60"
-                    >
-                      {deletingId === board.id ? "Deleting..." : "Delete"}
-                    </button>
-                  </div>
+                <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between bg-black/10 px-4 py-3 opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingId(board.id);
+                      setEditName(board.name);
+                    }}
+                    className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white/90 transition-colors hover:bg-white/20"
+                  >
+                    Rename
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(board.id);
+                    }}
+                    disabled={deletingId === board.id}
+                    className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white/90 transition-colors hover:bg-red-500/60"
+                  >
+                    {deletingId === board.id ? "Deleting..." : "Delete"}
+                  </button>
                 </div>
               </div>
             ))}

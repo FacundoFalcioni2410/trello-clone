@@ -11,6 +11,25 @@ export async function getCsrfCookie() {
   });
 }
 
+function extractErrorMessage(payload: unknown): string {
+  if (typeof payload === "string") return payload;
+  if (!payload || typeof payload !== "object") return "Request failed";
+
+  const p = payload as Record<string, unknown>;
+
+  if (p.errors && typeof p.errors === "object") {
+    const messages = Object.values(p.errors)
+      .flat()
+      .filter((m): m is string => typeof m === "string");
+    if (messages.length > 0) return messages.join(". ");
+  }
+
+  if (typeof p.message === "string" && p.message) return p.message;
+  if (typeof p.error === "string" && p.error) return p.error;
+
+  return `Request failed with status ${p.status ?? ""}`;
+}
+
 export async function apiFetch(path: string, options: RequestInit = {}) {
   const token = getXsrfToken();
 
@@ -26,8 +45,9 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
   });
 
   if (!res.ok) {
-    const error = await res.json().catch(() => ({ error: "Request failed" }));
-    throw new Error(error.error || error.message || `Request failed with ${res.status}`);
+    const body = await res.json().catch(() => null);
+    const message = body ? extractErrorMessage(body) : `Request failed (${res.status})`;
+    throw new Error(message);
   }
 
   return res.json();

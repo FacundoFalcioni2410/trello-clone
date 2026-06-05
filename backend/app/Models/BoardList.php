@@ -16,4 +16,9 @@ class BoardList extends Model
     {
         return $this->belongsTo(Board::class);
     }
+
+    public function cards()
+    {
+        return $this->hasMany(Card::class)->orderBy('position', 'asc')->orderBy('id', 'asc');
+    }
 }
