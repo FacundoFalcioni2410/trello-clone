@@ -13,6 +13,10 @@ Route::get('/user', function (Request $request) {
 Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('boards', BoardController::class);
 
+    Route::get('boards/{board}/members', [BoardController::class, 'members']);
+    Route::post('boards/{board}/members', [BoardController::class, 'invite']);
+    Route::delete('boards/{board}/members/{userId}', [BoardController::class, 'removeMember']);
+
     Route::get('boards/{board}/lists', [BoardListController::class, 'index']);
     Route::post('boards/{board}/lists', [BoardListController::class, 'store']);
     Route::put('boards/{board}/lists/{list}', [BoardListController::class, 'update']);

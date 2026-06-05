@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\BroadcastHelper;
 use App\Models\Board;
 use App\Models\BoardList;
 use Illuminate\Http\JsonResponse;
@@ -9,9 +10,11 @@ use Illuminate\Http\Request;
 
 class BoardListController extends Controller
 {
+    use BoardAccess;
+
     public function index(Request $request, Board $board): JsonResponse
     {
-        if ($board->owner_id !== $request->user()->id) {
+        if (! $this->canAccessBoard($request->user()->id, $board)) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -22,7 +25,7 @@ class BoardListController extends Controller
 
     public function store(Request $request, Board $board): JsonResponse
     {
-        if ($board->owner_id !== $request->user()->id) {
+        if (! $this->canAccessBoard($request->user()->id, $board)) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -36,12 +39,14 @@ class BoardListController extends Controller
             'position' => $validated['position'] ?? 0,
         ]);
 
+        BroadcastHelper::boardUpdated($board);
+
         return response()->json($list, 201);
     }
 
     public function update(Request $request, Board $board, BoardList $list): JsonResponse
     {
-        if ($board->owner_id !== $request->user()->id || $list->board_id !== $board->id) {
+        if (! $this->canAccessBoard($request->user()->id, $board) || $list->board_id !== $board->id) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -52,16 +57,20 @@ class BoardListController extends Controller
 
         $list->update($validated);
 
+        BroadcastHelper::boardUpdated($board);
+
         return response()->json($list);
     }
 
     public function destroy(Request $request, Board $board, BoardList $list): JsonResponse
     {
-        if ($board->owner_id !== $request->user()->id || $list->board_id !== $board->id) {
+        if (! $this->canAccessBoard($request->user()->id, $board) || $list->board_id !== $board->id) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
         $list->delete();
+
+        BroadcastHelper::boardUpdated($board);
 
         return response()->json(['message' => 'List deleted']);
     }

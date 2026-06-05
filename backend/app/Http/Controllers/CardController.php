@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\BroadcastHelper;
 use App\Models\Board;
 use App\Models\BoardList;
 use App\Models\Card;
@@ -11,9 +12,11 @@ use Illuminate\Http\Request;
 
 class CardController extends Controller
 {
+    use BoardAccess;
+
     public function index(Request $request, Board $board, BoardList $list): JsonResponse
     {
-        if ($board->owner_id !== $request->user()->id || $list->board_id !== $board->id) {
+        if (! $this->canAccessBoard($request->user()->id, $board) || $list->board_id !== $board->id) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -24,7 +27,7 @@ class CardController extends Controller
 
     public function store(Request $request, Board $board, BoardList $list): JsonResponse
     {
-        if ($board->owner_id !== $request->user()->id || $list->board_id !== $board->id) {
+        if (! $this->canAccessBoard($request->user()->id, $board) || $list->board_id !== $board->id) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -54,12 +57,14 @@ class CardController extends Controller
             'metadata' => ['title' => $card->title],
         ]);
 
+        BroadcastHelper::boardUpdated($board);
+
         return response()->json($card, 201);
     }
 
     public function update(Request $request, Board $board, BoardList $list, Card $card): JsonResponse
     {
-        if ($board->owner_id !== $request->user()->id || $list->board_id !== $board->id || $card->board_list_id !== $list->id) {
+        if (! $this->canAccessBoard($request->user()->id, $board) || $list->board_id !== $board->id || $card->board_list_id !== $list->id) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -149,12 +154,14 @@ class CardController extends Controller
             ]);
         }
 
+        BroadcastHelper::boardUpdated($board);
+
         return response()->json($card->load('checklistItems'));
     }
 
     public function destroy(Request $request, Board $board, BoardList $list, Card $card): JsonResponse
     {
-        if ($board->owner_id !== $request->user()->id || $list->board_id !== $board->id || $card->board_list_id !== $list->id) {
+        if (! $this->canAccessBoard($request->user()->id, $board) || $list->board_id !== $board->id || $card->board_list_id !== $list->id) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -165,6 +172,8 @@ class CardController extends Controller
             'metadata' => ['title' => $card->title],
         ]);
 
+        BroadcastHelper::boardUpdated($board);
+
         $card->delete();
 
         return response()->json(['message' => 'Card deleted']);
@@ -172,7 +181,7 @@ class CardController extends Controller
 
     public function indexChecklistItems(Request $request, Board $board, BoardList $list, Card $card): JsonResponse
     {
-        if ($board->owner_id !== $request->user()->id || $list->board_id !== $board->id || $card->board_list_id !== $list->id) {
+        if (! $this->canAccessBoard($request->user()->id, $board) || $list->board_id !== $board->id || $card->board_list_id !== $list->id) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -181,7 +190,7 @@ class CardController extends Controller
 
     public function storeChecklistItem(Request $request, Board $board, BoardList $list, Card $card): JsonResponse
     {
-        if ($board->owner_id !== $request->user()->id || $list->board_id !== $board->id || $card->board_list_id !== $list->id) {
+        if (! $this->canAccessBoard($request->user()->id, $board) || $list->board_id !== $board->id || $card->board_list_id !== $list->id) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -206,12 +215,14 @@ class CardController extends Controller
             'metadata' => ['text' => $item->text],
         ]);
 
+        BroadcastHelper::boardUpdated($board);
+
         return response()->json($item, 201);
     }
 
     public function updateChecklistItem(Request $request, Board $board, BoardList $list, Card $card, ChecklistItem $item): JsonResponse
     {
-        if ($board->owner_id !== $request->user()->id || $list->board_id !== $board->id || $card->board_list_id !== $list->id || $item->card_id !== $card->id) {
+        if (! $this->canAccessBoard($request->user()->id, $board) || $list->board_id !== $board->id || $card->board_list_id !== $list->id || $item->card_id !== $card->id) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -245,12 +256,14 @@ class CardController extends Controller
             ]);
         }
 
+        BroadcastHelper::boardUpdated($board);
+
         return response()->json($item);
     }
 
     public function destroyChecklistItem(Request $request, Board $board, BoardList $list, Card $card, ChecklistItem $item): JsonResponse
     {
-        if ($board->owner_id !== $request->user()->id || $list->board_id !== $board->id || $card->board_list_id !== $list->id || $item->card_id !== $card->id) {
+        if (! $this->canAccessBoard($request->user()->id, $board) || $list->board_id !== $board->id || $card->board_list_id !== $list->id || $item->card_id !== $card->id) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -260,6 +273,8 @@ class CardController extends Controller
             'description' => 'removed a checklist item',
             'metadata' => ['text' => $item->text],
         ]);
+
+        BroadcastHelper::boardUpdated($board);
 
         $item->delete();
 

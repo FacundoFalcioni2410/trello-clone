@@ -21,4 +21,14 @@ class Board extends Model
     {
         return $this->hasMany(BoardList::class);
     }
+
+    public function members()
+    {
+        return $this->hasMany(BoardMember::class);
+    }
+
+    public function isMember(int $userId): bool
+    {
+        return $this->members()->where('user_id', $userId)->exists();
+    }
 }

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch, getCsrfCookie } from "@/lib/api";
+import { listenToBoard } from "@/lib/echo";
 import {
   DndContext,
   DragOverlay,
@@ -74,11 +75,23 @@ interface BoardList {
   cards: Card[];
 }
 
+interface BoardMember {
+  id: number;
+  board_id: number;
+  user_id: number;
+  user: User;
+  role: string;
+  created_at: string;
+}
+
 interface Board {
   id: number;
   name: string;
   background_color: string | null;
   background_image: string | null;
+  owner_id: number;
+  owner: User;
+  members: BoardMember[];
   lists: BoardList[];
 }
 
@@ -261,6 +274,11 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
   const [newChecklistText, setNewChecklistText] = useState("");
   const [addingChecklist, setAddingChecklist] = useState(false);
+  const [showMembers, setShowMembers] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviting, setInviting] = useState(false);
+  const [removingMemberId, setRemovingMemberId] = useState<number | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -270,8 +288,14 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
         const { id } = await params;
         if (cancelled) return;
         await getCsrfCookie();
-        const data = await apiFetch(`/api/boards/${id}`);
-        if (!cancelled) setBoard(data);
+        const [boardData, userData] = await Promise.all([
+          apiFetch(`/api/boards/${id}`),
+          apiFetch("/api/user"),
+        ]);
+        if (!cancelled) {
+          setBoard(boardData);
+          setCurrentUser(userData);
+        }
       } catch (err) {
         if (cancelled) return;
         const message = err instanceof Error ? err.message : "Failed to load board";
@@ -288,6 +312,8 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const isOwner = board && currentUser ? board.owner_id === currentUser.id : false;
+
   // Keep selectedCard in sync with board changes (checklist, drag & drop, etc.)
   useEffect(() => {
     if (!board || !selectedCard) return;
@@ -297,6 +323,18 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [board]);
+
+  // Real-time updates via WebSocket
+  useEffect(() => {
+    if (!board) return;
+    const unsubscribe = listenToBoard(board.id, () => {
+      refreshBoard();
+    });
+    return () => {
+      unsubscribe();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [board?.id]);
 
   async function refreshBoard() {
     if (!board) return;
@@ -436,6 +474,36 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
   async function handleLogout() {
     try { await mutate("/logout", { method: "POST" }); } catch { /* ignore */ }
     router.push("/login");
+  }
+
+  async function handleInviteMember() {
+    if (!board || !inviteEmail.trim()) return;
+    setInviting(true);
+    try {
+      await mutate(`/api/boards/${board.id}/members`, {
+        method: "POST",
+        body: JSON.stringify({ email: inviteEmail.trim() }),
+      });
+      setInviteEmail("");
+      await refreshBoard();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to invite member");
+    } finally {
+      setInviting(false);
+    }
+  }
+
+  async function handleRemoveMember(userId: number) {
+    if (!board) return;
+    setRemovingMemberId(userId);
+    try {
+      await mutate(`/api/boards/${board.id}/members/${userId}`, { method: "DELETE" });
+      await refreshBoard();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove member");
+    } finally {
+      setRemovingMemberId(null);
+    }
   }
 
   async function handleAddChecklistItem() {
@@ -686,19 +754,35 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
             <div className="h-5 w-px bg-white/20" />
             <h1 className="text-lg font-bold text-white drop-shadow-sm">{board?.name || "Board"}</h1>
           </div>
-          <button
-            onClick={handleLogout}
-            className="rounded-lg px-3 py-1.5 text-sm font-medium text-white/80 transition-all hover:bg-white/20 hover:text-white"
-          >
-            Log out
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowMembers(true)}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-white/90 transition-all hover:bg-white/20 hover:text-white"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              Members
+            </button>
+            <button
+              onClick={handleLogout}
+              className="rounded-lg px-3 py-1.5 text-sm font-medium text-white/80 transition-all hover:bg-white/20 hover:text-white"
+            >
+              Log out
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="relative flex-1 overflow-x-auto overflow-y-hidden">
         {error && !loading && (
-          <div className="absolute left-6 right-6 top-5 z-10 rounded-xl bg-red-500/90 px-4 py-3 text-sm text-white shadow-lg backdrop-blur-sm">
-            {error}
+          <div className="absolute left-6 right-6 top-5 z-10 flex items-center justify-between rounded-xl bg-red-500/90 px-4 py-3 text-sm text-white shadow-lg backdrop-blur-sm">
+            <span>{error}</span>
+            <button
+              onClick={() => setError("")}
+              className="ml-3 rounded-md p-1 text-white/70 hover:bg-white/20 hover:text-white transition-colors"
+              aria-label="Dismiss error"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
           </div>
         )}
 
@@ -885,6 +969,81 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
           </DndContext>
         )}
       </main>
+
+      {showMembers && board && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onClick={() => setShowMembers(false)}>
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-5 flex items-start justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Board members</h2>
+                <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">Manage who has access to this board</p>
+              </div>
+              <button onClick={() => setShowMembers(false)} className="rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-white">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {board.owner && (
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                    {board.owner.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">{board.owner.name}</p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">{board.owner.email}</p>
+                  </div>
+                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-600 dark:bg-blue-900/20 dark:text-blue-400">Owner</span>
+                </div>
+              )}
+
+              {(board.members || []).map((member) => (
+                <div key={member.id} className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-xs font-bold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
+                    {member.user.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">{member.user.name}</p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">{member.user.email}</p>
+                  </div>
+                  <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-bold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400 capitalize">{member.role}</span>
+                  {isOwner && (
+                    <button
+                      onClick={() => handleRemoveMember(member.user_id)}
+                      disabled={removingMemberId === member.user_id}
+                      className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                    </button>
+                  )}
+                </div>
+              ))}
+
+              {isOwner && (
+                <div className="flex items-center gap-2 pt-2">
+                  <input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleInviteMember();
+                    }}
+                    placeholder="Enter email to invite..."
+                    className="flex-1 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 placeholder-zinc-400 outline-none transition-all focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white dark:focus:ring-blue-900/30"
+                  />
+                  <button
+                    onClick={handleInviteMember}
+                    disabled={inviting || !inviteEmail.trim()}
+                    className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white transition-all hover:bg-blue-500 disabled:opacity-40"
+                  >
+                    {inviting ? "..." : "Invite"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {selectedCard && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onClick={() => setSelectedCard(null)}>
