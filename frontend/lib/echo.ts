@@ -90,3 +90,30 @@ export function listenToBoard(boardId: number, callback: () => void) {
     pusher.unsubscribe(channelName);
   };
 }
+
+export function listenToUser(userId: number, callback: () => void) {
+  const pusher = getPusher();
+  if (!pusher) return () => {};
+
+  const channelName = `users.${userId}`;
+  const channel = pusher.subscribe(channelName);
+  const eventName = "user.boards.updated";
+
+  channel.bind("pusher:subscription_succeeded", () => {
+    console.log(`[Pusher] Subscribed to ${channelName}`);
+  });
+
+  channel.bind("pusher:subscription_error", (status: unknown) => {
+    console.warn(`[Pusher] Subscription error for ${channelName}:`, status);
+  });
+
+  channel.bind(eventName, (data: unknown) => {
+    console.log(`[Pusher] Event ${eventName} received:`, data);
+    callback();
+  });
+
+  return () => {
+    channel.unbind(eventName, callback);
+    pusher.unsubscribe(channelName);
+  };
+}

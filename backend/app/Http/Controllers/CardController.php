@@ -17,7 +17,7 @@ class CardController extends Controller
     public function index(Request $request, Board $board, BoardList $list): JsonResponse
     {
         if (! $this->canAccessBoard($request->user()->id, $board) || $list->board_id !== $board->id) {
-            return response()->json(['error' => 'Unauthorized'], 403);
+            return $this->denyAccess();
         }
 
         $cards = $list->cards()->with(['checklistItems', 'activities.user'])->orderBy('position', 'asc')->get();
@@ -28,7 +28,7 @@ class CardController extends Controller
     public function store(Request $request, Board $board, BoardList $list): JsonResponse
     {
         if (! $this->canAccessBoard($request->user()->id, $board) || $list->board_id !== $board->id) {
-            return response()->json(['error' => 'Unauthorized'], 403);
+            return $this->denyAccess();
         }
 
         $validated = $request->validate([
@@ -65,7 +65,7 @@ class CardController extends Controller
     public function update(Request $request, Board $board, BoardList $list, Card $card): JsonResponse
     {
         if (! $this->canAccessBoard($request->user()->id, $board) || $list->board_id !== $board->id || $card->board_list_id !== $list->id) {
-            return response()->json(['error' => 'Unauthorized'], 403);
+            return $this->denyAccess();
         }
 
         $validated = $request->validate([
@@ -81,7 +81,7 @@ class CardController extends Controller
         if (isset($validated['board_list_id'])) {
             $targetList = BoardList::find($validated['board_list_id']);
             if (! $targetList || $targetList->board_id !== $board->id) {
-                return response()->json(['error' => 'Unauthorized'], 403);
+                return $this->denyAccess();
             }
         }
 
@@ -162,7 +162,7 @@ class CardController extends Controller
     public function destroy(Request $request, Board $board, BoardList $list, Card $card): JsonResponse
     {
         if (! $this->canAccessBoard($request->user()->id, $board) || $list->board_id !== $board->id || $card->board_list_id !== $list->id) {
-            return response()->json(['error' => 'Unauthorized'], 403);
+            return $this->denyAccess();
         }
 
         $card->activities()->create([
@@ -182,7 +182,7 @@ class CardController extends Controller
     public function indexChecklistItems(Request $request, Board $board, BoardList $list, Card $card): JsonResponse
     {
         if (! $this->canAccessBoard($request->user()->id, $board) || $list->board_id !== $board->id || $card->board_list_id !== $list->id) {
-            return response()->json(['error' => 'Unauthorized'], 403);
+            return $this->denyAccess();
         }
 
         return response()->json($card->checklistItems()->orderBy('position', 'asc')->orderBy('id', 'asc')->get());
@@ -191,7 +191,7 @@ class CardController extends Controller
     public function storeChecklistItem(Request $request, Board $board, BoardList $list, Card $card): JsonResponse
     {
         if (! $this->canAccessBoard($request->user()->id, $board) || $list->board_id !== $board->id || $card->board_list_id !== $list->id) {
-            return response()->json(['error' => 'Unauthorized'], 403);
+            return $this->denyAccess();
         }
 
         $validated = $request->validate([
@@ -223,7 +223,7 @@ class CardController extends Controller
     public function updateChecklistItem(Request $request, Board $board, BoardList $list, Card $card, ChecklistItem $item): JsonResponse
     {
         if (! $this->canAccessBoard($request->user()->id, $board) || $list->board_id !== $board->id || $card->board_list_id !== $list->id || $item->card_id !== $card->id) {
-            return response()->json(['error' => 'Unauthorized'], 403);
+            return $this->denyAccess();
         }
 
         $validated = $request->validate([
@@ -264,7 +264,7 @@ class CardController extends Controller
     public function destroyChecklistItem(Request $request, Board $board, BoardList $list, Card $card, ChecklistItem $item): JsonResponse
     {
         if (! $this->canAccessBoard($request->user()->id, $board) || $list->board_id !== $board->id || $card->board_list_id !== $list->id || $item->card_id !== $card->id) {
-            return response()->json(['error' => 'Unauthorized'], 403);
+            return $this->denyAccess();
         }
 
         $card->activities()->create([

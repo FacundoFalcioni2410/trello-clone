@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\UserBoardsUpdated;
 use App\Models\Board;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -51,7 +52,7 @@ class BoardController extends Controller
     public function show(Request $request, Board $board): JsonResponse
     {
         if (! $this->canAccessBoard($request->user()->id, $board)) {
-            return response()->json(['error' => 'Unauthorized'], 403);
+            return $this->denyAccess();
         }
 
         $board->load(['owner', 'members.user', 'lists.cards.checklistItems', 'lists.cards.activities.user']);
@@ -62,7 +63,7 @@ class BoardController extends Controller
     public function update(Request $request, Board $board): JsonResponse
     {
         if (! $this->canAccessBoard($request->user()->id, $board)) {
-            return response()->json(['error' => 'Unauthorized'], 403);
+            return $this->denyAccess();
         }
 
         $validated = $request->validate([
@@ -79,7 +80,7 @@ class BoardController extends Controller
     public function destroy(Request $request, Board $board): JsonResponse
     {
         if (! $this->canManageBoard($request->user()->id, $board)) {
-            return response()->json(['error' => 'Unauthorized'], 403);
+            return $this->denyAccess();
         }
 
         $board->delete();
@@ -128,6 +129,8 @@ class BoardController extends Controller
             'role' => $validated['role'] ?? 'member',
         ]);
 
+        broadcast(new UserBoardsUpdated($user->id));
+
         return response()->json($member->load('user'), 201);
     }
 
@@ -142,6 +145,8 @@ class BoardController extends Controller
         if (! $deleted) {
             return response()->json(['error' => 'Member not found'], 404);
         }
+
+        broadcast(new UserBoardsUpdated($userId));
 
         return response()->json(['message' => 'Member removed']);
     }

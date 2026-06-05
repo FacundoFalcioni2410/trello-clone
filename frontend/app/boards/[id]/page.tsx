@@ -109,6 +109,10 @@ async function mutate(path: string, options: RequestInit = {}) {
   return apiFetch(path, options);
 }
 
+function isAccessDeniedError(message: string): boolean {
+  return message.includes("403") || message.includes("You don't have access") || message.includes("You no longer have access");
+}
+
 function replaceCardInBoard(prev: Board | null, cardId: number, updater: (card: Card) => Card): Board | null {
   if (!prev) return prev;
   return {
@@ -301,6 +305,9 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
         const message = err instanceof Error ? err.message : "Failed to load board";
         if (message.includes("401") || message.includes("Unauthenticated")) {
           router.push("/login");
+        } else if (isAccessDeniedError(message)) {
+          setError("Access denied. Redirecting...");
+          setTimeout(() => router.push("/"), 2000);
         } else {
           setError(message);
         }
@@ -342,8 +349,13 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
       await getCsrfCookie();
       const data = await apiFetch(`/api/boards/${board.id}`);
       setBoard(data);
-    } catch {
-      // ignore refresh failures
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
+      if (isAccessDeniedError(message)) {
+        setError("You no longer have access to this board. Redirecting...");
+        setTimeout(() => router.push("/"), 2000);
+      }
+      // ignore other refresh failures
     }
   }
 

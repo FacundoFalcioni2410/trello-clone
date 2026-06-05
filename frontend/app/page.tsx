@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch, getCsrfCookie } from "@/lib/api";
+import { listenToUser } from "@/lib/echo";
 
 interface Board {
   id: number;
@@ -12,6 +13,12 @@ interface Board {
   owner_id: number;
   created_at: string;
   updated_at: string;
+}
+
+interface User {
+  id: number;
+  name: string;
+  email: string;
 }
 
 const PRESET_COLORS = [
@@ -31,15 +38,37 @@ export default function Home() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const router = useRouter();
+
+  async function loadBoards() {
+    try {
+      await getCsrfCookie();
+      const data = await apiFetch("/api/boards");
+      setBoards(data);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load boards";
+      if (message.includes("401") || message.includes("Unauthenticated")) {
+        router.push("/login");
+      } else {
+        setError(message);
+      }
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         await getCsrfCookie();
-        const data = await apiFetch("/api/boards");
-        if (!cancelled) setBoards(data);
+        const [boardsData, userData] = await Promise.all([
+          apiFetch("/api/boards"),
+          apiFetch("/api/user"),
+        ]);
+        if (!cancelled) {
+          setBoards(boardsData);
+          setCurrentUser(userData);
+        }
       } catch (err) {
         if (cancelled) return;
         const message = err instanceof Error ? err.message : "Failed to load boards";
@@ -55,6 +84,17 @@ export default function Home() {
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const unsubscribe = listenToUser(currentUser.id, () => {
+      loadBoards();
+    });
+    return () => {
+      unsubscribe();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();

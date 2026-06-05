@@ -15,7 +15,7 @@ class BoardListController extends Controller
     public function index(Request $request, Board $board): JsonResponse
     {
         if (! $this->canAccessBoard($request->user()->id, $board)) {
-            return response()->json(['error' => 'Unauthorized'], 403);
+            return $this->denyAccess();
         }
 
         $lists = $board->lists()->with(['cards'])->orderBy('position', 'asc')->get();
@@ -26,7 +26,7 @@ class BoardListController extends Controller
     public function store(Request $request, Board $board): JsonResponse
     {
         if (! $this->canAccessBoard($request->user()->id, $board)) {
-            return response()->json(['error' => 'Unauthorized'], 403);
+            return $this->denyAccess();
         }
 
         $validated = $request->validate([
@@ -47,7 +47,7 @@ class BoardListController extends Controller
     public function update(Request $request, Board $board, BoardList $list): JsonResponse
     {
         if (! $this->canAccessBoard($request->user()->id, $board) || $list->board_id !== $board->id) {
-            return response()->json(['error' => 'Unauthorized'], 403);
+            return $this->denyAccess();
         }
 
         $validated = $request->validate([
@@ -65,7 +65,7 @@ class BoardListController extends Controller
     public function destroy(Request $request, Board $board, BoardList $list): JsonResponse
     {
         if (! $this->canAccessBoard($request->user()->id, $board) || $list->board_id !== $board->id) {
-            return response()->json(['error' => 'Unauthorized'], 403);
+            return $this->denyAccess();
         }
 
         $list->delete();
