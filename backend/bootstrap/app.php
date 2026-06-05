@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'login',
             'register',
         ]);
+        $middleware->statefulApi();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

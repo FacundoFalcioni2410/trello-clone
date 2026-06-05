@@ -1,0 +1,13 @@
+{
+  "name": "trello-clone",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev:back\" \"npm run dev:front\" --names \"BACK,FRONT\" --prefix-colors \"cyan,green\" --kill-others",
+    "dev:back": "cd backend && php artisan serve",
+    "dev:front": "cd frontend && npm run dev",
+    "setup": "cd backend && composer install && cd ../frontend && npm install && cd .. && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}
