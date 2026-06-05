@@ -22,4 +22,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('boards/{board}/lists/{list}/cards', [CardController::class, 'store']);
     Route::put('boards/{board}/lists/{list}/cards/{card}', [CardController::class, 'update']);
     Route::delete('boards/{board}/lists/{list}/cards/{card}', [CardController::class, 'destroy']);
+
+    Route::get('boards/{board}/lists/{list}/cards/{card}/checklist-items', [CardController::class, 'indexChecklistItems']);
+    Route::post('boards/{board}/lists/{list}/cards/{card}/checklist-items', [CardController::class, 'storeChecklistItem']);
+    Route::put('boards/{board}/lists/{list}/cards/{card}/checklist-items/{item}', [CardController::class, 'updateChecklistItem']);
+    Route::delete('boards/{board}/lists/{list}/cards/{card}/checklist-items/{item}', [CardController::class, 'destroyChecklistItem']);
 });
