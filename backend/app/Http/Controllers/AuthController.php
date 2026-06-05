@@ -38,7 +38,7 @@ class AuthController extends Controller {
 
         if (!Auth::attempt($credentials)) {
             return response()->json([
-                'error'=> 'Wrong credentials',
+                'error' => 'Wrong credentials',
             ],401);
         }
 
@@ -46,6 +46,16 @@ class AuthController extends Controller {
 
         return response()->json([
             'user' => Auth::user()
+        ]);
+    }
+
+    public function logout(Request $request) {
+        Auth::logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return response()->json([
+            'message' => 'Logged out'
         ]);
     }
 }
