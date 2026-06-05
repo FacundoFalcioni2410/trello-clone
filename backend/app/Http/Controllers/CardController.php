@@ -17,7 +17,7 @@ class CardController extends Controller
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        $cards = $list->cards()->with('checklistItems')->orderBy('position', 'asc')->get();
+        $cards = $list->cards()->with(['checklistItems', 'activities.user'])->orderBy('position', 'asc')->get();
 
         return response()->json($cards);
     }
@@ -47,6 +47,13 @@ class CardController extends Controller
             'labels' => $validated['labels'] ?? null,
         ]);
 
+        $card->activities()->create([
+            'user_id' => $request->user()->id,
+            'type' => 'created',
+            'description' => 'created this card',
+            'metadata' => ['title' => $card->title],
+        ]);
+
         return response()->json($card, 201);
     }
 
@@ -73,7 +80,74 @@ class CardController extends Controller
             }
         }
 
+        $original = $card->only(['title', 'description', 'due_date', 'labels', 'board_list_id']);
         $card->update($validated);
+        $card->refresh();
+
+        $userId = $request->user()->id;
+
+        if (isset($validated['title']) && $validated['title'] !== $original['title']) {
+            $card->activities()->create([
+                'user_id' => $userId,
+                'type' => 'title_changed',
+                'description' => 'changed the title',
+                'metadata' => ['from' => $original['title'], 'to' => $validated['title']],
+            ]);
+        }
+
+        if (isset($validated['description']) && $validated['description'] !== $original['description']) {
+            $card->activities()->create([
+                'user_id' => $userId,
+                'type' => 'description_changed',
+                'description' => 'updated the description',
+            ]);
+        }
+
+        if (isset($validated['due_date']) && $validated['due_date'] !== $original['due_date']) {
+            $card->activities()->create([
+                'user_id' => $userId,
+                'type' => 'due_date_changed',
+                'description' => $validated['due_date'] ? 'set a due date' : 'removed the due date',
+                'metadata' => ['due_date' => $validated['due_date']],
+            ]);
+        }
+
+        if (isset($validated['labels'])) {
+            $oldLabels = $original['labels'] ?? [];
+            $newLabels = $validated['labels'] ?? [];
+            $added = array_diff($newLabels, $oldLabels);
+            $removed = array_diff($oldLabels, $newLabels);
+            if (! empty($added)) {
+                $card->activities()->create([
+                    'user_id' => $userId,
+                    'type' => 'labels_added',
+                    'description' => 'added labels',
+                    'metadata' => ['labels' => $added],
+                ]);
+            }
+            if (! empty($removed)) {
+                $card->activities()->create([
+                    'user_id' => $userId,
+                    'type' => 'labels_removed',
+                    'description' => 'removed labels',
+                    'metadata' => ['labels' => $removed],
+                ]);
+            }
+        }
+
+        if (isset($validated['board_list_id']) && $validated['board_list_id'] !== $original['board_list_id']) {
+            $fromList = BoardList::find($original['board_list_id']);
+            $toList = BoardList::find($validated['board_list_id']);
+            $card->activities()->create([
+                'user_id' => $userId,
+                'type' => 'moved',
+                'description' => 'moved this card',
+                'metadata' => [
+                    'from_list' => $fromList?->name,
+                    'to_list' => $toList?->name,
+                ],
+            ]);
+        }
 
         return response()->json($card->load('checklistItems'));
     }
@@ -83,6 +157,13 @@ class CardController extends Controller
         if ($board->owner_id !== $request->user()->id || $list->board_id !== $board->id || $card->board_list_id !== $list->id) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
+
+        $card->activities()->create([
+            'user_id' => $request->user()->id,
+            'type' => 'deleted',
+            'description' => 'deleted this card',
+            'metadata' => ['title' => $card->title],
+        ]);
 
         $card->delete();
 
@@ -118,6 +199,13 @@ class CardController extends Controller
             'position' => $validated['position'] ?? ($maxPosition + 1),
         ]);
 
+        $card->activities()->create([
+            'user_id' => $request->user()->id,
+            'type' => 'checklist_added',
+            'description' => 'added a checklist item',
+            'metadata' => ['text' => $item->text],
+        ]);
+
         return response()->json($item, 201);
     }
 
@@ -133,7 +221,29 @@ class CardController extends Controller
             'position' => ['nullable', 'integer'],
         ]);
 
+        $original = $item->only(['text', 'completed']);
         $item->update($validated);
+        $item->refresh();
+
+        $userId = $request->user()->id;
+
+        if (isset($validated['completed']) && $validated['completed'] !== $original['completed']) {
+            $card->activities()->create([
+                'user_id' => $userId,
+                'type' => 'checklist_completed',
+                'description' => $validated['completed'] ? 'completed a checklist item' : 'unchecked a checklist item',
+                'metadata' => ['text' => $item->text],
+            ]);
+        }
+
+        if (isset($validated['text']) && $validated['text'] !== $original['text']) {
+            $card->activities()->create([
+                'user_id' => $userId,
+                'type' => 'checklist_updated',
+                'description' => 'updated a checklist item',
+                'metadata' => ['from' => $original['text'], 'to' => $validated['text']],
+            ]);
+        }
 
         return response()->json($item);
     }
@@ -143,6 +253,13 @@ class CardController extends Controller
         if ($board->owner_id !== $request->user()->id || $list->board_id !== $board->id || $card->board_list_id !== $list->id || $item->card_id !== $card->id) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
+
+        $card->activities()->create([
+            'user_id' => $request->user()->id,
+            'type' => 'checklist_removed',
+            'description' => 'removed a checklist item',
+            'metadata' => ['text' => $item->text],
+        ]);
 
         $item->delete();
 

@@ -41,7 +41,7 @@ class BoardController extends Controller
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        $board->load(['owner', 'lists.cards.checklistItems']);
+        $board->load(['owner', 'lists.cards.checklistItems', 'lists.cards.activities.user']);
 
         return response()->json($board);
     }

@@ -36,6 +36,24 @@ interface ChecklistItem {
   updated_at: string;
 }
 
+interface User {
+  id: number;
+  name: string;
+  email: string;
+}
+
+interface CardActivity {
+  id: number;
+  card_id: number;
+  user_id: number | null;
+  user: User | null;
+  type: string;
+  description: string;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+}
+
 interface Card {
   id: number;
   title: string;
@@ -45,6 +63,7 @@ interface Card {
   board_list_id: number;
   labels: string[] | null;
   checklist_items: ChecklistItem[];
+  activities: CardActivity[];
   created_at: string;
 }
 
@@ -281,8 +300,13 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
 
   async function refreshBoard() {
     if (!board) return;
-    const data = await apiFetch(`/api/boards/${board.id}`);
-    setBoard(data);
+    try {
+      await getCsrfCookie();
+      const data = await apiFetch(`/api/boards/${board.id}`);
+      setBoard(data);
+    } catch {
+      // ignore refresh failures
+    }
   }
 
   async function handleCreateList(e: React.FormEvent) {
@@ -386,6 +410,7 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
           labels: updatedCard.labels,
         }),
       });
+      await refreshBoard();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update card");
       setBoard(prevBoard);
@@ -453,6 +478,7 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
           checklist_items: (c.checklist_items || []).map((i) => (i.id === tempId ? item : i)),
         }))
       );
+      await refreshBoard();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add checklist item");
       setChecklistItems(prevChecklist);
@@ -486,6 +512,7 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
         method: "PUT",
         body: JSON.stringify({ completed: nextCompleted }),
       });
+      await refreshBoard();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update checklist item");
       setChecklistItems(prevChecklist);
@@ -511,6 +538,7 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
       await mutate(`/api/boards/${board.id}/lists/${selectedCard.list.id}/cards/${selectedCard.card.id}/checklist-items/${itemId}`, {
         method: "DELETE",
       });
+      await refreshBoard();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete checklist item");
       setChecklistItems(prevChecklist);
@@ -935,6 +963,30 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
                       {addingChecklist ? "..." : "Add"}
                     </button>
                   </div>
+                </div>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Activity</label>
+                <div className="space-y-3">
+                  {(selectedCard.card.activities || []).length === 0 && (
+                    <p className="text-xs text-zinc-400 dark:text-zinc-500">No activity yet.</p>
+                  )}
+                  {(selectedCard.card.activities || []).map((activity) => (
+                    <div key={activity.id} className="flex items-start gap-2">
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                        {activity.user?.name?.charAt(0).toUpperCase() ?? "?"}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-zinc-700 dark:text-zinc-300">
+                          <span className="font-semibold">{activity.user?.name ?? "Unknown"}</span>{" "}
+                          {activity.description}
+                        </p>
+                        <p className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-500">
+                          {formatDate(activity.created_at)} at {new Date(activity.created_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
               <div className="flex items-center gap-3 pt-2">

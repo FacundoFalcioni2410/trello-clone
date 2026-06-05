@@ -25,4 +25,9 @@ class Card extends Model
     {
         return $this->hasMany(ChecklistItem::class)->orderBy('position', 'asc')->orderBy('id', 'asc');
     }
+
+    public function activities()
+    {
+        return $this->hasMany(CardActivity::class)->orderBy('created_at', 'desc');
+    }
 }
