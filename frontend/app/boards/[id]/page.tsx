@@ -12,7 +12,6 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
-  useDroppable,
   defaultDropAnimationSideEffects,
   type DragEndEvent,
   type DragOverEvent,
@@ -22,87 +21,15 @@ import {
   SortableContext,
   arrayMove,
   sortableKeyboardCoordinates,
-  useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-
-interface ChecklistItem {
-  id: number;
-  card_id: number;
-  text: string;
-  completed: boolean;
-  position: number;
-  created_at: string;
-  updated_at: string;
-}
-
-interface User {
-  id: number;
-  name: string;
-  email: string;
-}
-
-interface CardActivity {
-  id: number;
-  card_id: number;
-  user_id: number | null;
-  user: User | null;
-  type: string;
-  description: string;
-  metadata: Record<string, unknown> | null;
-  created_at: string;
-  updated_at: string;
-}
-
-interface Card {
-  id: number;
-  title: string;
-  description: string | null;
-  due_date: string | null;
-  position: number;
-  board_list_id: number;
-  labels: string[] | null;
-  checklist_items: ChecklistItem[];
-  activities: CardActivity[];
-  created_at: string;
-}
-
-interface BoardList {
-  id: number;
-  name: string;
-  position: number;
-  cards: Card[];
-}
-
-interface BoardMember {
-  id: number;
-  board_id: number;
-  user_id: number;
-  user: User;
-  role: string;
-  created_at: string;
-}
-
-interface Board {
-  id: number;
-  name: string;
-  background_color: string | null;
-  background_image: string | null;
-  owner_id: number;
-  owner: User;
-  members: BoardMember[];
-  lists: BoardList[];
-}
-
-function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-function isOverdue(dateStr: string | null) {
-  if (!dateStr) return false;
-  return new Date(dateStr) < new Date(new Date().toDateString());
-}
+import { LabelPicker } from "./components/LabelPicker";
+import { StatusPicker } from "./components/StatusPicker";
+import { StatusBadge } from "./components/StatusBadge";
+import { SortableCard } from "./components/SortableCard";
+import { DroppableColumn } from "./components/DroppableColumn";
+import { Board, Card, CardStatus, BoardList, ChecklistItem, User } from "./components/types";
+import { formatDate, isOverdue } from "./components/utils";
 
 async function mutate(path: string, options: RequestInit = {}) {
   await getCsrfCookie();
@@ -124,134 +51,6 @@ function replaceCardInBoard(prev: Board | null, cardId: number, updater: (card: 
   };
 }
 
-const LABEL_COLORS: { key: string; bg: string; text: string }[] = [
-  { key: "red", bg: "bg-red-500", text: "text-white" },
-  { key: "orange", bg: "bg-orange-500", text: "text-white" },
-  { key: "yellow", bg: "bg-yellow-500", text: "text-black" },
-  { key: "green", bg: "bg-green-500", text: "text-white" },
-  { key: "blue", bg: "bg-blue-500", text: "text-white" },
-  { key: "purple", bg: "bg-purple-500", text: "text-white" },
-  { key: "pink", bg: "bg-pink-500", text: "text-white" },
-  { key: "slate", bg: "bg-slate-500", text: "text-white" },
-];
-
-function LabelBadge({ color }: { color: string }) {
-  const found = LABEL_COLORS.find((l) => l.key === color);
-  if (!found) return null;
-  return (
-    <span className={`inline-block h-2 w-8 rounded-full ${found.bg}`} title={color} />
-  );
-}
-
-function LabelPicker({
-  selected,
-  onToggle,
-}: {
-  selected: string[];
-  onToggle: (color: string) => void;
-}) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {LABEL_COLORS.map((label) => {
-        const isSelected = selected.includes(label.key);
-        return (
-          <button
-            key={label.key}
-            onClick={() => onToggle(label.key)}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${label.bg} ${label.text} ${isSelected ? "ring-2 ring-offset-1 ring-zinc-400 dark:ring-offset-zinc-900" : "opacity-60 hover:opacity-100"}`}
-          >
-            {isSelected && (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-            )}
-            {label.key}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function SortableCard({
-  card,
-  onClick,
-}: {
-  card: Card;
-  onClick: (card: Card) => void;
-}) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: card.id, data: { card } });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
-  };
-
-  const overdue = isOverdue(card.due_date);
-  const checklistTotal = card.checklist_items?.length ?? 0;
-  const checklistDone = card.checklist_items?.filter((i) => i.completed).length ?? 0;
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      onClick={() => onClick(card)}
-      className="group relative cursor-grab rounded-xl bg-white p-3.5 text-left shadow-sm ring-1 ring-zinc-200 transition-all hover:shadow-md hover:ring-zinc-300 active:cursor-grabbing dark:bg-zinc-800 dark:ring-zinc-700 dark:hover:ring-zinc-600"
-    >
-      {card.labels && card.labels.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-1.5">
-          {card.labels.map((color) => (
-            <LabelBadge key={color} color={color} />
-          ))}
-        </div>
-      )}
-      {card.due_date && (
-        <div className={`mb-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${overdue ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"}`}>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2z"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/></svg>
-          {formatDate(card.due_date)}
-        </div>
-      )}
-      <p className="text-sm font-medium leading-snug text-zinc-800 dark:text-zinc-100">{card.title}</p>
-      {card.description && (
-        <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">{card.description}</p>
-      )}
-      {checklistTotal > 0 && (
-        <div className={`mt-2 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${checklistDone === checklistTotal ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"}`}>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>
-          {checklistDone}/{checklistTotal}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function DroppableColumn({
-  list,
-  children,
-}: {
-  list: BoardList;
-  children: React.ReactNode;
-}) {
-  const { setNodeRef, isOver } = useDroppable({ id: `list-${list.id}`, data: { listId: list.id } });
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={`flex w-80 shrink-0 flex-col rounded-2xl bg-white/85 shadow-xl backdrop-blur-xl transition-colors dark:bg-zinc-900/85 ${isOver ? "ring-2 ring-blue-400/60 bg-white/95 dark:bg-zinc-800/95" : ""}`}
-    >
-      {children}
-    </div>
-  );
-}
-
 export default function BoardPage({ params }: { params: Promise<{ id: string }> }) {
   const [board, setBoard] = useState<Board | null>(null);
   const [loading, setLoading] = useState(true);
@@ -263,6 +62,8 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
   const [newCardDescriptions, setNewCardDescriptions] = useState<Record<number, string>>({});
   const [newCardDueDates, setNewCardDueDates] = useState<Record<number, string>>({});
   const [newCardLabels, setNewCardLabels] = useState<Record<number, string[]>>({});
+  const [newCardStatuses, setNewCardStatuses] = useState<Record<number, string>>({});
+  const [newCardParentIds, setNewCardParentIds] = useState<Record<number, number | null>>({});
   const [creatingCardListId, setCreatingCardListId] = useState<number | null>(null);
   const [editingListId, setEditingListId] = useState<number | null>(null);
   const [editListName, setEditListName] = useState("");
@@ -272,6 +73,8 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
   const [editCardDescription, setEditCardDescription] = useState("");
   const [editCardDueDate, setEditCardDueDate] = useState("");
   const [editCardLabels, setEditCardLabels] = useState<string[]>([]);
+  const [editCardStatus, setEditCardStatus] = useState<string>("todo");
+  const [editCardParentId, setEditCardParentId] = useState<number | null>(null);
   const [savingCard, setSavingCard] = useState(false);
   const [deletingCardId, setDeletingCardId] = useState<number | null>(null);
   const [activeDragCard, setActiveDragCard] = useState<Card | null>(null);
@@ -389,6 +192,8 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
           description: newCardDescriptions[listId]?.trim() || null,
           due_date: newCardDueDates[listId] || null,
           labels: newCardLabels[listId] || null,
+          status: newCardStatuses[listId] || "todo",
+          parent_id: newCardParentIds[listId] ?? null,
         }),
       });
       await refreshBoard();
@@ -396,6 +201,8 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
       setNewCardDescriptions((prev) => ({ ...prev, [listId]: "" }));
       setNewCardDueDates((prev) => ({ ...prev, [listId]: "" }));
       setNewCardLabels((prev) => ({ ...prev, [listId]: [] }));
+      setNewCardStatuses((prev) => ({ ...prev, [listId]: "" }));
+      setNewCardParentIds((prev) => ({ ...prev, [listId]: null }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create card");
     } finally {
@@ -443,6 +250,8 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
       description: editCardDescription.trim() || null,
       due_date: editCardDueDate || null,
       labels: editCardLabels.length > 0 ? editCardLabels : null,
+      status: (editCardStatus as CardStatus) || "todo",
+      parent_id: editCardParentId ?? null,
     };
 
     const prevBoard = board;
@@ -458,6 +267,8 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
           description: updatedCard.description,
           due_date: updatedCard.due_date,
           labels: updatedCard.labels,
+          status: updatedCard.status,
+          parent_id: updatedCard.parent_id,
         }),
       });
       await refreshBoard();
@@ -866,6 +677,8 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
                             setEditCardDescription(c.description || "");
                             setEditCardDueDate(c.due_date || "");
                             setEditCardLabels(c.labels || []);
+                            setEditCardStatus(c.status || "todo");
+                            setEditCardParentId(c.parent_id ?? null);
                             setChecklistItems(c.checklist_items || []);
                           }}
                         />
@@ -914,6 +727,27 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
                                 });
                               }}
                             />
+                          </div>
+                          <div className="mt-2">
+                            <StatusPicker
+                              selected={newCardStatuses[list.id] || "todo"}
+                              onChange={(status) => {
+                                setNewCardStatuses((prev) => ({ ...prev, [list.id]: status }));
+                              }}
+                            />
+                          </div>
+                          <div className="mt-2">
+                            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Parent</label>
+                            <select
+                              value={newCardParentIds[list.id] || ""}
+                              onChange={(e) => setNewCardParentIds((prev) => ({ ...prev, [list.id]: e.target.value ? Number(e.target.value) : null }))}
+                              className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-800 outline-none transition-all focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white dark:focus:ring-blue-900/30"
+                            >
+                              <option value="">No parent (top-level)</option>
+                              {list.cards.filter((c) => !c.parent_id).map((c) => (
+                                <option key={c.id} value={c.id}>{c.title}</option>
+                              ))}
+                            </select>
                           </div>
                         </>
                       )}
@@ -1095,6 +929,44 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
                   }}
                 />
               </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Status</label>
+                <StatusPicker
+                  selected={editCardStatus}
+                  onChange={(status) => setEditCardStatus(status)}
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Parent</label>
+                <select
+                  value={editCardParentId ?? ""}
+                  onChange={(e) => setEditCardParentId(e.target.value ? Number(e.target.value) : null)}
+                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-800 outline-none ring-2 ring-transparent transition-all focus:border-blue-400 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:focus:ring-blue-900/30"
+                >
+                  <option value="">No parent (top-level)</option>
+                  {selectedCard.list.cards
+                    .filter((c) => c.id !== selectedCard.card.id && !c.parent_id)
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>{c.title}</option>
+                    ))}
+                </select>
+              </div>
+              {(selectedCard.card.children?.length ?? 0) > 0 && (
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Subtasks</label>
+                  <div className="space-y-2">
+                    {(selectedCard.card.children || []).map((child) => (
+                      <div key={child.id} className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800">
+                        <StatusBadge status={child.status} />
+                        <span className="flex-1 text-sm text-zinc-800 dark:text-zinc-200">{child.title}</span>
+                        {child.due_date && (
+                          <span className="text-[10px] text-zinc-500 dark:text-zinc-400">{formatDate(child.due_date)}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Checklist</label>
                 <div className="space-y-2">

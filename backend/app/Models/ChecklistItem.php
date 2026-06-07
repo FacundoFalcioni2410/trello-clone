@@ -11,6 +11,10 @@ class ChecklistItem extends Model
 {
     use HasFactory;
 
+    protected $casts = [
+        'completed' => 'boolean',
+    ];
+
     public function card()
     {
         return $this->belongsTo(Card::class);

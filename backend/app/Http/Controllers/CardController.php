@@ -38,7 +38,16 @@ class CardController extends Controller
             'position' => ['nullable', 'integer'],
             'labels' => ['nullable', 'array'],
             'labels.*' => ['string', 'max:255'],
+            'status' => ['nullable', 'string', 'in:todo,in_progress,done,blocked,on_hold'],
+            'parent_id' => ['nullable', 'integer', 'exists:cards,id'],
         ]);
+
+        if (isset($validated['parent_id'])) {
+            $parent = Card::find($validated['parent_id']);
+            if (! $parent || $parent->board_list_id !== $list->id) {
+                return response()->json(['error' => 'Invalid parent card'], 422);
+            }
+        }
 
         $maxPosition = $list->cards()->max('position') ?? -1;
 
@@ -48,6 +57,8 @@ class CardController extends Controller
             'due_date' => $validated['due_date'] ?? null,
             'position' => $validated['position'] ?? ($maxPosition + 1),
             'labels' => $validated['labels'] ?? null,
+            'status' => $validated['status'] ?? 'todo',
+            'parent_id' => $validated['parent_id'] ?? null,
         ]);
 
         $card->activities()->create([
@@ -76,6 +87,8 @@ class CardController extends Controller
             'board_list_id' => ['nullable', 'integer', 'exists:board_lists,id'],
             'labels' => ['nullable', 'array'],
             'labels.*' => ['string', 'max:255'],
+            'status' => ['nullable', 'string', 'in:todo,in_progress,done,blocked,on_hold'],
+            'parent_id' => ['nullable', 'integer', 'exists:cards,id'],
         ]);
 
         if (isset($validated['board_list_id'])) {
@@ -85,7 +98,14 @@ class CardController extends Controller
             }
         }
 
-        $original = $card->only(['title', 'description', 'due_date', 'labels', 'board_list_id']);
+        if (isset($validated['parent_id'])) {
+            $parent = Card::find($validated['parent_id']);
+            if (! $parent || $parent->board_list_id !== $list->id || $parent->id === $card->id) {
+                return response()->json(['error' => 'Invalid parent card'], 422);
+            }
+        }
+
+        $original = $card->only(['title', 'description', 'due_date', 'labels', 'board_list_id', 'status', 'parent_id']);
         $card->update($validated);
         $card->refresh();
 
@@ -140,6 +160,31 @@ class CardController extends Controller
             }
         }
 
+        if (isset($validated['status']) && $validated['status'] !== $original['status']) {
+            $card->activities()->create([
+                'user_id' => $userId,
+                'type' => 'status_changed',
+                'description' => 'changed status',
+                'metadata' => ['from' => $original['status'], 'to' => $validated['status']],
+            ]);
+        }
+
+        if (isset($validated['parent_id']) && $validated['parent_id'] !== $original['parent_id']) {
+            $parent = $validated['parent_id'] ? Card::find($validated['parent_id']) : null;
+            $oldParent = $original['parent_id'] ? Card::find($original['parent_id']) : null;
+            $card->activities()->create([
+                'user_id' => $userId,
+                'type' => 'parent_changed',
+                'description' => $validated['parent_id'] ? 'linked as subtask' : 'unlinked from parent',
+                'metadata' => [
+                    'parent_id' => $validated['parent_id'],
+                    'parent_title' => $parent?->title,
+                    'old_parent_id' => $original['parent_id'],
+                    'old_parent_title' => $oldParent?->title,
+                ],
+            ]);
+        }
+
         if (isset($validated['board_list_id']) && $validated['board_list_id'] !== $original['board_list_id']) {
             $fromList = BoardList::find($original['board_list_id']);
             $toList = BoardList::find($validated['board_list_id']);
@@ -156,7 +201,7 @@ class CardController extends Controller
 
         BroadcastHelper::boardUpdated($board);
 
-        return response()->json($card->load('checklistItems'));
+        return response()->json($card->load(['checklistItems', 'children']));
     }
 
     public function destroy(Request $request, Board $board, BoardList $list, Card $card): JsonResponse

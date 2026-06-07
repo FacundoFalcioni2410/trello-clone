@@ -11,7 +11,7 @@ export async function getCsrfCookie() {
   });
 }
 
-function extractErrorMessage(payload: unknown): string {
+export function extractErrorMessage(payload: unknown): string {
   if (typeof payload === "string") return payload;
   if (!payload || typeof payload !== "object") return "Request failed";
 

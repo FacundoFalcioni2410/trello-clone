@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-#[Fillable(['title', 'description', 'due_date', 'position', 'board_list_id', 'labels'])]
+#[Fillable(['title', 'description', 'due_date', 'position', 'board_list_id', 'labels', 'status', 'parent_id'])]
 class Card extends Model
 {
     use HasFactory, SoftDeletes;
@@ -29,5 +29,15 @@ class Card extends Model
     public function activities()
     {
         return $this->hasMany(CardActivity::class)->orderBy('created_at', 'desc');
+    }
+
+    public function parent()
+    {
+        return $this->belongsTo(Card::class, 'parent_id');
+    }
+
+    public function children()
+    {
+        return $this->hasMany(Card::class, 'parent_id')->orderBy('position', 'asc')->orderBy('id', 'asc');
     }
 }

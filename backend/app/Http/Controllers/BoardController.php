@@ -55,7 +55,7 @@ class BoardController extends Controller
             return $this->denyAccess();
         }
 
-        $board->load(['owner', 'members.user', 'lists.cards.checklistItems', 'lists.cards.activities.user']);
+        $board->load(['owner', 'members.user', 'lists.cards.children', 'lists.cards.checklistItems', 'lists.cards.activities.user']);
 
         return response()->json($board);
     }

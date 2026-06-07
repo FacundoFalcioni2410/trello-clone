@@ -24,6 +24,8 @@ class CardFactory extends Factory
             'due_date' => fake()->optional()->dateTime(),
             'position' => fake()->numberBetween(0, 100),
             'board_list_id' => BoardList::factory(),
+            'status' => fake()->randomElement(['todo', 'in_progress', 'done', 'blocked', 'on_hold']),
+            'parent_id' => null,
         ];
     }
 }
