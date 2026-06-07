@@ -276,15 +276,7 @@ export default function Home() {
                       className="w-full rounded-xl border border-white/20 bg-black/20 px-3 py-2 text-lg font-bold text-white placeholder-white/40 outline-none backdrop-blur-md"
                     />
                   ) : (
-                    <h3
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingId(board.id);
-                        setEditName(board.name);
-                      }}
-                      className="cursor-text text-lg font-bold text-white drop-shadow-md"
-                      title="Click to rename"
-                    >
+                    <h3 className="text-lg font-bold text-white drop-shadow-md">
                       {board.name}
                     </h3>
                   )}
