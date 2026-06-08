@@ -26,6 +26,7 @@ import {
 import { LabelDropdown } from "./components/LabelDropdown";
 import { MarkdownDescription } from "./components/MarkdownDescription";
 import { StatusPicker } from "./components/StatusPicker";
+import { useTheme } from "@/app/components/ThemeProvider";
 import { SortableCard } from "./components/SortableCard";
 import { CardPreview } from "./components/CardPreview";
 import { DroppableColumn } from "./components/DroppableColumn";
@@ -89,6 +90,7 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
   const [removingMemberId, setRemovingMemberId] = useState<number | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const router = useRouter();
+  const { theme, toggle: toggleTheme } = useTheme();
 
   useEffect(() => {
     let cancelled = false;
@@ -627,6 +629,17 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
               <span className="hidden sm:inline">Members</span>
             </button>
             <button
+              onClick={toggleTheme}
+              title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              className="rounded px-2 py-1.5 text-xs font-semibold text-white/70 transition hover:bg-white/20 hover:text-white"
+            >
+              {theme === "dark" ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+              )}
+            </button>
+            <button
               onClick={handleLogout}
               className="rounded px-2.5 py-1.5 text-xs font-semibold text-white/70 transition hover:bg-white/20 hover:text-white"
             >
@@ -682,12 +695,12 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
                           if (e.key === "Escape") setEditingListId(null);
                         }}
                         autoFocus
-                        className="flex-1 rounded bg-white px-2 py-1 text-sm font-bold text-[#172b4d] outline-none ring-2 ring-[#0052cc]"
+                        className="flex-1 rounded bg-[var(--c-card)] px-2 py-1 text-sm font-bold text-[var(--c-t1)] outline-none ring-2 ring-[#0052cc]"
                       />
                     ) : (
                       <h3
                         onClick={() => { setEditingListId(list.id); setEditListName(list.name); }}
-                        className="flex-1 cursor-pointer select-none rounded px-2 py-1 text-sm font-bold text-[#172b4d] hover:bg-black/5"
+                        className="flex-1 cursor-pointer select-none rounded px-2 py-1 text-sm font-bold text-[var(--c-t1)] hover:bg-black/5"
                       >
                         {list.name}
                       </h3>
@@ -695,7 +708,7 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
                     <button
                       onClick={() => handleDeleteList(list.id)}
                       disabled={deletingListId === list.id}
-                      className="flex h-7 w-7 items-center justify-center rounded text-[#44546f] transition-colors hover:bg-black/10"
+                      className="flex h-7 w-7 items-center justify-center rounded text-[var(--c-t2)] transition-colors hover:bg-black/10"
                       title="Delete list"
                     >
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
@@ -703,7 +716,7 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
                   </div>
 
                   {/* Cards */}
-                  <div className="flex flex-col gap-2 px-2 overflow-y-auto max-h-[calc(100vh-220px)] scrollbar-thin scrollbar-thumb-[#c1c7d0] scrollbar-track-transparent">
+                  <div className="flex flex-col gap-2 px-2 overflow-y-auto max-h-[calc(100vh-220px)] scrollbar-thin scrollbar-thumb-[var(--c-sep)] scrollbar-track-transparent">
                     <SortableContext
                       items={list.cards.filter((c) => !c.parent_id).map((c) => c.id)}
                       strategy={verticalListSortingStrategy}
@@ -724,7 +737,7 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
                             }}
                           />
                           {card.children && card.children.length > 0 && (
-                            <div className="flex flex-col gap-1 ml-2 pl-2 border-l-2 border-[#c1c7d0]">
+                            <div className="flex flex-col gap-1 ml-2 pl-2 border-l-2 border-[var(--c-sep)]">
                               {card.children.map((child) => (
                                 <CardPreview
                                   key={child.id}
@@ -746,7 +759,7 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
                         </div>
                       ))}
                       {list.cards.filter((c) => !c.parent_id).length === 0 && (
-                        <div className="rounded-lg border-2 border-dashed border-[#c1c7d0] py-6 text-center text-xs text-[#8590a2]">
+                        <div className="rounded-lg border-2 border-dashed border-[var(--c-sep)] py-6 text-center text-xs text-[var(--c-t4)]">
                           Drop cards here
                         </div>
                       )}
@@ -757,7 +770,7 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
                   <div className="p-2">
                     <button
                       onClick={() => openCreateModal(list)}
-                      className="flex w-full items-center gap-1.5 rounded-lg px-2 py-2 text-sm text-[#44546f] transition-colors hover:bg-black/10 hover:text-[#172b4d]"
+                      className="flex w-full items-center gap-1.5 rounded-lg px-2 py-2 text-sm text-[var(--c-t2)] transition-colors hover:bg-black/10 hover:text-[var(--c-t1)]"
                     >
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
                       Add a card
@@ -768,14 +781,14 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
 
               <div className="w-[272px] shrink-0 snap-start">
                 {addingList ? (
-                  <form onSubmit={handleCreateList} className="rounded-xl bg-[#f1f2f4] p-2">
+                  <form onSubmit={handleCreateList} className="rounded-xl bg-[var(--c-col)] p-2">
                     <input
                       type="text"
                       value={newListName}
                       onChange={(e) => setNewListName(e.target.value)}
                       placeholder="Enter list title..."
                       autoFocus
-                      className="w-full rounded bg-white px-2 py-1.5 text-sm font-medium text-[#172b4d] placeholder-[#8590a2] outline-none ring-2 ring-[#0052cc]"
+                      className="w-full rounded bg-[var(--c-card)] px-2 py-1.5 text-sm font-medium text-[var(--c-t1)] placeholder-[var(--c-t4)] outline-none ring-2 ring-[#0052cc]"
                     />
                     <div className="mt-2 flex items-center gap-2">
                       <button
@@ -788,7 +801,7 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
                       <button
                         type="button"
                         onClick={() => { setAddingList(false); setNewListName(""); }}
-                        className="rounded p-1.5 text-[#44546f] hover:bg-black/10"
+                        className="rounded p-1.5 text-[var(--c-t2)] hover:bg-black/10"
                       >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                       </button>
@@ -808,8 +821,8 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
 
             <DragOverlay dropAnimation={dropAnimation}>
               {activeDragCard ? (
-                <div className="rounded-lg bg-white shadow-2xl opacity-90 px-3 py-2">
-                  <p className="text-sm text-[#172b4d]">{activeDragCard.title}</p>
+                <div className="rounded-lg bg-[var(--c-card)] shadow-2xl opacity-90 px-3 py-2">
+                  <p className="text-sm text-[var(--c-t1)]">{activeDragCard.title}</p>
                 </div>
               ) : null}
             </DragOverlay>
@@ -819,7 +832,7 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
 
       {showMembers && board && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 sm:p-4 backdrop-blur-sm" onClick={() => setShowMembers(false)}>
-          <div className="w-full h-full sm:h-auto sm:max-w-md rounded-none sm:rounded-3xl bg-white p-4 sm:p-6 shadow-2xl dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full h-full sm:h-auto sm:max-w-md rounded-none sm:rounded-3xl bg-[var(--c-card)]p-4 sm:p-6 shadow-2xl dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
             <div className="mb-4 sm:mb-5 flex items-start justify-between">
               <div>
                 <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Board members</h2>
@@ -898,28 +911,28 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
           onClick={() => setSelectedCard(null)}
         >
           <div
-            className="relative my-auto w-full max-w-2xl rounded-xl bg-[#f4f5f7] shadow-2xl max-h-[85vh] overflow-y-auto"
+            className="relative my-auto w-full max-w-2xl rounded-xl bg-[var(--c-modal)] shadow-2xl max-h-[85vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Close */}
             <button
               onClick={() => setSelectedCard(null)}
-              className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg text-[#44546f] hover:bg-black/10"
+              className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg text-[var(--c-t2)] hover:bg-black/10"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
             </button>
 
             {/* Title area */}
             <div className="flex items-start gap-3 px-5 pt-5 pb-2">
-              <svg className="mt-1 shrink-0 text-[#44546f]" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+              <svg className="mt-1 shrink-0 text-[var(--c-t2)]" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
               <div className="flex-1 min-w-0 pr-8">
                 <textarea
                   value={editCardTitle}
                   onChange={(e) => setEditCardTitle(e.target.value)}
                   rows={1}
-                  className="w-full resize-none rounded bg-transparent px-1 py-0.5 text-lg font-bold text-[#172b4d] outline-none hover:bg-white/70 focus:bg-white focus:ring-2 focus:ring-[#0052cc]"
+                  className="w-full resize-none rounded bg-transparent px-1 py-0.5 text-lg font-bold text-[var(--c-t1)] outline-none hover:bg-[var(--c-field)] focus:bg-[var(--c-card)] focus:ring-2 focus:ring-[#0052cc]"
                 />
-                <span className="mt-1 inline-flex items-center rounded bg-[#ebecf0] px-2 py-0.5 text-xs font-medium text-[#44546f]">
+                <span className="mt-1 inline-flex items-center rounded bg-[var(--c-field)] px-2 py-0.5 text-xs font-medium text-[var(--c-t2)]">
                   {selectedCard.list.name}
                 </span>
               </div>
@@ -935,16 +948,16 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
                 {/* Checklist */}
                 <div>
                   <div className="mb-2 flex items-center gap-2">
-                    <svg className="text-[#44546f]" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-                    <h3 className="text-sm font-semibold text-[#172b4d]">Checklist</h3>
+                    <svg className="text-[var(--c-t2)]" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                    <h3 className="text-sm font-semibold text-[var(--c-t1)]">Checklist</h3>
                   </div>
                   {checklistItems.length > 0 && (
                     <>
                       <div className="mb-3 flex items-center gap-2">
-                        <span className="w-7 text-right text-[10px] text-[#5e6c84]">
+                        <span className="w-7 text-right text-[10px] text-[var(--c-t3)]">
                           {Math.round((checklistItems.filter((i) => i.completed).length / checklistItems.length) * 100)}%
                         </span>
-                        <div className="flex-1 h-2 rounded-full bg-[#ebecf0]">
+                        <div className="flex-1 h-2 rounded-full bg-[var(--c-field)]">
                           <div
                             className={`h-2 rounded-full transition-all ${checklistItems.filter((i) => i.completed).length === checklistItems.length ? "bg-green-500" : "bg-[#0052cc]"}`}
                             style={{ width: `${(checklistItems.filter((i) => i.completed).length / checklistItems.length) * 100}%` }}
@@ -953,17 +966,17 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
                       </div>
                       <div className="space-y-0.5">
                         {checklistItems.map((item) => (
-                          <div key={item.id} className="group flex items-center gap-2 rounded px-1 py-1 hover:bg-[#ebecf0]">
+                          <div key={item.id} className="group flex items-center gap-2 rounded px-1 py-1 hover:bg-[var(--c-field)]">
                             <button
                               onClick={() => handleToggleChecklistItem(item)}
-                              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${item.completed ? "border-[#0052cc] bg-[#0052cc]" : "border-[#8590a2] bg-white hover:border-[#0052cc]"}`}
+                              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${item.completed ? "border-[#0052cc] bg-[#0052cc]" : "border-[var(--c-t4)] bg-[var(--c-card)] hover:border-[#0052cc]"}`}
                             >
                               {item.completed && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>}
                             </button>
-                            <span className={`flex-1 text-sm ${item.completed ? "text-[#5e6c84] line-through" : "text-[#172b4d]"}`}>{item.text}</span>
+                            <span className={`flex-1 text-sm ${item.completed ? "text-[var(--c-t3)] line-through" : "text-[var(--c-t1)]"}`}>{item.text}</span>
                             <button
                               onClick={() => handleDeleteChecklistItem(item.id)}
-                              className="hidden rounded p-0.5 text-[#8590a2] hover:bg-[#dfe1e6] hover:text-[#172b4d] group-hover:flex"
+                              className="hidden rounded p-0.5 text-[var(--c-t4)] hover:bg-[var(--c-field-h)] hover:text-[var(--c-t1)] group-hover:flex"
                             >
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                             </button>
@@ -979,12 +992,12 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
                       onChange={(e) => setNewChecklistText(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") handleAddChecklistItem(); }}
                       placeholder="Add an item..."
-                      className="flex-1 rounded-lg bg-white px-3 py-2 text-sm text-[#172b4d] placeholder-[#8590a2] outline-none ring-1 ring-[#dfe1e6] focus:ring-2 focus:ring-[#0052cc]"
+                      className="flex-1 rounded-lg bg-[var(--c-card)] px-3 py-2 text-sm text-[var(--c-t1)] placeholder-[var(--c-t4)] outline-none ring-1 ring-[var(--c-border)] focus:ring-2 focus:ring-[#0052cc]"
                     />
                     <button
                       onClick={handleAddChecklistItem}
                       disabled={addingChecklist || !newChecklistText.trim()}
-                      className="rounded bg-[#ebecf0] px-3 py-2 text-sm font-medium text-[#172b4d] hover:bg-[#dfe1e6] disabled:opacity-50"
+                      className="rounded bg-[var(--c-field)] px-3 py-2 text-sm font-medium text-[var(--c-t1)] hover:bg-[var(--c-field-h)] disabled:opacity-50"
                     >
                       {addingChecklist ? "..." : "Add"}
                     </button>
@@ -995,15 +1008,15 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
                 {(selectedCard.card.children?.length ?? 0) > 0 && (
                   <div>
                     <div className="mb-2 flex items-center gap-2">
-                      <svg className="text-[#44546f]" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
-                      <h3 className="text-sm font-semibold text-[#172b4d]">Subtasks</h3>
-                      <span className="text-xs text-[#5e6c84]">
+                      <svg className="text-[var(--c-t2)]" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
+                      <h3 className="text-sm font-semibold text-[var(--c-t1)]">Subtasks</h3>
+                      <span className="text-xs text-[var(--c-t3)]">
                         {selectedCard.card.children!.filter((c) => c.status === "done").length}/{selectedCard.card.children!.length}
                       </span>
                     </div>
                     <div className="space-y-1.5">
                       {(selectedCard.card.children || []).map((child) => (
-                        <div key={child.id} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 shadow-sm ring-1 ring-[#dfe1e6]">
+                        <div key={child.id} className="flex items-center gap-2 rounded-lg bg-[var(--c-card)] px-3 py-2 shadow-sm ring-1 ring-[var(--c-border)]">
                           <button
                             onClick={() => {
                               setSelectedCard({ list: selectedCard.list, card: child });
@@ -1015,11 +1028,11 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
                               setEditCardParentId(child.parent_id ?? null);
                               setChecklistItems(child.checklist_items || []);
                             }}
-                            className="flex-1 min-w-0 text-left text-sm text-[#172b4d] leading-snug hover:text-[#0052cc]"
+                            className="flex-1 min-w-0 text-left text-sm text-[var(--c-t1)] leading-snug hover:text-[#0052cc]"
                           >
                             {child.title}
                           </button>
-                          <div className="flex shrink-0 items-center gap-1.5 rounded bg-[#ebecf0] px-1.5 py-1 hover:bg-[#dfe1e6]">
+                          <div className="flex shrink-0 items-center gap-1.5 rounded bg-[var(--c-field)] px-1.5 py-1 hover:bg-[var(--c-field-h)]">
                             <span className={`h-2 w-2 shrink-0 rounded-full ${STATUS_CONFIG[child.status || "todo"]?.dot ?? "bg-zinc-400"}`} />
                             <select
                               value={child.status || "todo"}
@@ -1040,12 +1053,12 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
                 {/* Activity */}
                 <div>
                   <div className="mb-2 flex items-center gap-2">
-                    <svg className="text-[#44546f]" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                    <h3 className="text-sm font-semibold text-[#172b4d]">Activity</h3>
+                    <svg className="text-[var(--c-t2)]" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    <h3 className="text-sm font-semibold text-[var(--c-t1)]">Activity</h3>
                   </div>
                   <div className="space-y-3">
                     {(selectedCard.card.activities || []).length === 0 && (
-                      <p className="text-xs text-[#8590a2]">No activity yet.</p>
+                      <p className="text-xs text-[var(--c-t4)]">No activity yet.</p>
                     )}
                     {(selectedCard.card.activities || []).map((activity) => (
                       <div key={activity.id} className="flex items-start gap-2">
@@ -1053,10 +1066,10 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
                           {activity.user?.name?.charAt(0).toUpperCase() ?? "?"}
                         </div>
                         <div className="flex-1">
-                          <p className="text-xs text-[#172b4d]">
+                          <p className="text-xs text-[var(--c-t1)]">
                             <span className="font-semibold">{activity.user?.name ?? "Unknown"}</span>{" "}{activity.description}
                           </p>
-                          <p className="mt-0.5 text-[10px] text-[#8590a2]">
+                          <p className="mt-0.5 text-[10px] text-[var(--c-t4)]">
                             {formatDate(activity.created_at)} at {new Date(activity.created_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
                           </p>
                         </div>
@@ -1076,7 +1089,7 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
                   </button>
                   <button
                     onClick={() => setSelectedCard(null)}
-                    className="rounded px-4 py-2 text-sm text-[#172b4d] hover:bg-[#ebecf0]"
+                    className="rounded px-4 py-2 text-sm text-[var(--c-t1)] hover:bg-[var(--c-field)]"
                   >
                     Cancel
                   </button>
@@ -1087,13 +1100,13 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
               <div className="sm:w-44 shrink-0 space-y-4">
                 {/* Status */}
                 <div>
-                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#5e6c84]">Status</p>
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--c-t3)]">Status</p>
                   <StatusPicker selected={editCardStatus} onChange={(status) => setEditCardStatus(status)} />
                 </div>
 
                 {/* Labels */}
                 <div>
-                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#5e6c84]">Labels</p>
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--c-t3)]">Labels</p>
                   <LabelDropdown
                     selected={editCardLabels}
                     onToggle={(color) => setEditCardLabels((prev) => prev.includes(color) ? prev.filter((c) => c !== color) : [...prev, color])}
@@ -1102,23 +1115,23 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
 
                 {/* Due date */}
                 <div>
-                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#5e6c84]">Due date</p>
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--c-t3)]">Due date</p>
                   <input
                     type="date"
                     value={editCardDueDate}
                     onChange={(e) => setEditCardDueDate(e.target.value)}
-                    className="w-full rounded bg-[#ebecf0] px-2 py-1.5 text-sm text-[#172b4d] outline-none hover:bg-[#dfe1e6] focus:bg-white focus:ring-2 focus:ring-[#0052cc]"
+                    className="w-full rounded bg-[var(--c-field)] px-2 py-1.5 text-sm text-[var(--c-t1)] outline-none hover:bg-[var(--c-field-h)] focus:bg-[var(--c-card)] focus:ring-2 focus:ring-[#0052cc]"
                   />
                   {isOverdue(editCardDueDate) && <p className="mt-1 text-xs font-medium text-red-500">Overdue</p>}
                 </div>
 
                 {/* Parent */}
                 <div>
-                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#5e6c84]">Parent card</p>
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--c-t3)]">Parent card</p>
                   <select
                     value={editCardParentId ?? ""}
                     onChange={(e) => setEditCardParentId(e.target.value ? Number(e.target.value) : null)}
-                    className="w-full rounded bg-[#ebecf0] px-2 py-1.5 text-xs text-[#172b4d] outline-none hover:bg-[#dfe1e6] focus:bg-white focus:ring-2 focus:ring-[#0052cc]"
+                    className="w-full rounded bg-[var(--c-field)] px-2 py-1.5 text-xs text-[var(--c-t1)] outline-none hover:bg-[var(--c-field-h)] focus:bg-[var(--c-card)] focus:ring-2 focus:ring-[#0052cc]"
                   >
                     <option value="">No parent</option>
                     {selectedCard.list.cards
@@ -1129,11 +1142,11 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
 
                 {/* Delete */}
                 <div>
-                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#5e6c84]">Actions</p>
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--c-t3)]">Actions</p>
                   <button
                     onClick={() => handleDeleteCard(selectedCard.list.id, selectedCard.card.id)}
                     disabled={deletingCardId === selectedCard.card.id}
-                    className="flex w-full items-center gap-2 rounded bg-[#ebecf0] px-3 py-2 text-sm text-[#172b4d] hover:bg-red-100 hover:text-red-600 disabled:opacity-50"
+                    className="flex w-full items-center gap-2 rounded bg-[var(--c-field)] px-3 py-2 text-sm text-[var(--c-t1)] hover:bg-red-100 hover:text-red-600 disabled:opacity-50"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                     {deletingCardId === selectedCard.card.id ? "Deleting..." : "Delete card"}
@@ -1151,18 +1164,18 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
           onClick={closeCreateModal}
         >
           <div
-            className="relative my-auto w-full max-w-2xl rounded-xl bg-[#f4f5f7] shadow-2xl"
+            className="relative my-auto w-full max-w-2xl rounded-xl bg-[var(--c-modal)] shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <button
               onClick={closeCreateModal}
-              className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg text-[#44546f] hover:bg-black/10"
+              className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg text-[var(--c-t2)] hover:bg-black/10"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
             </button>
 
             <div className="flex items-start gap-3 px-5 pt-5 pb-2">
-              <svg className="mt-1 shrink-0 text-[#44546f]" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+              <svg className="mt-1 shrink-0 text-[var(--c-t2)]" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
               <div className="flex-1 min-w-0 pr-8">
                 <textarea
                   autoFocus
@@ -1171,9 +1184,9 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleCreateCard(); } }}
                   placeholder="Card title..."
                   rows={1}
-                  className="w-full resize-none rounded bg-transparent px-1 py-0.5 text-lg font-bold text-[#172b4d] placeholder-[#8590a2] outline-none hover:bg-white/70 focus:bg-white focus:ring-2 focus:ring-[#0052cc]"
+                  className="w-full resize-none rounded bg-transparent px-1 py-0.5 text-lg font-bold text-[var(--c-t1)] placeholder-[var(--c-t4)] outline-none hover:bg-[var(--c-field)] focus:bg-[var(--c-card)] focus:ring-2 focus:ring-[#0052cc]"
                 />
-                <span className="mt-1 inline-flex items-center rounded bg-[#ebecf0] px-2 py-0.5 text-xs font-medium text-[#44546f]">
+                <span className="mt-1 inline-flex items-center rounded bg-[var(--c-field)] px-2 py-0.5 text-xs font-medium text-[var(--c-t2)]">
                   {createCardList.name}
                 </span>
               </div>
@@ -1190,7 +1203,7 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
                   >
                     {creatingCardListId === createCardList.id ? "Adding..." : "Add card"}
                   </button>
-                  <button onClick={closeCreateModal} className="rounded px-4 py-2 text-sm text-[#172b4d] hover:bg-[#ebecf0]">
+                  <button onClick={closeCreateModal} className="rounded px-4 py-2 text-sm text-[var(--c-t1)] hover:bg-[var(--c-field)]">
                     Cancel
                   </button>
                 </div>
@@ -1198,31 +1211,31 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
 
               <div className="sm:w-44 shrink-0 space-y-4">
                 <div>
-                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#5e6c84]">Status</p>
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--c-t3)]">Status</p>
                   <StatusPicker selected={createStatus} onChange={setCreateStatus} />
                 </div>
                 <div>
-                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#5e6c84]">Labels</p>
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--c-t3)]">Labels</p>
                   <LabelDropdown
                     selected={createLabels}
                     onToggle={(color) => setCreateLabels((prev) => prev.includes(color) ? prev.filter((c) => c !== color) : [...prev, color])}
                   />
                 </div>
                 <div>
-                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#5e6c84]">Due date</p>
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--c-t3)]">Due date</p>
                   <input
                     type="date"
                     value={createDueDate}
                     onChange={(e) => setCreateDueDate(e.target.value)}
-                    className="w-full rounded bg-[#ebecf0] px-2 py-1.5 text-sm text-[#172b4d] outline-none hover:bg-[#dfe1e6] focus:bg-white focus:ring-2 focus:ring-[#0052cc]"
+                    className="w-full rounded bg-[var(--c-field)] px-2 py-1.5 text-sm text-[var(--c-t1)] outline-none hover:bg-[var(--c-field-h)] focus:bg-[var(--c-card)] focus:ring-2 focus:ring-[#0052cc]"
                   />
                 </div>
                 <div>
-                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#5e6c84]">Parent card</p>
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--c-t3)]">Parent card</p>
                   <select
                     value={createParentId ?? ""}
                     onChange={(e) => setCreateParentId(e.target.value ? Number(e.target.value) : null)}
-                    className="w-full rounded bg-[#ebecf0] px-2 py-1.5 text-xs text-[#172b4d] outline-none hover:bg-[#dfe1e6] focus:bg-white focus:ring-2 focus:ring-[#0052cc]"
+                    className="w-full rounded bg-[var(--c-field)] px-2 py-1.5 text-xs text-[var(--c-t1)] outline-none hover:bg-[var(--c-field-h)] focus:bg-[var(--c-card)] focus:ring-2 focus:ring-[#0052cc]"
                   >
                     <option value="">No parent</option>
                     {createCardList.cards.filter((c) => !c.parent_id).map((c) => (

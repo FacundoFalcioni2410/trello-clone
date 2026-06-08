@@ -19,10 +19,10 @@ export function LabelDropdown({ selected, onToggle }: { selected: string[]; onTo
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-2 rounded bg-[#ebecf0] px-2 py-1.5 text-sm text-[#172b4d] hover:bg-[#dfe1e6]"
+        className="flex w-full items-center gap-2 rounded bg-[var(--c-field)] px-2 py-1.5 text-sm text-[var(--c-t1)] hover:bg-[var(--c-field-h)]"
       >
         {selected.length === 0 ? (
-          <span className="text-[#5e6c84] text-xs">None</span>
+          <span className="text-[var(--c-t3)] text-xs">None</span>
         ) : (
           <div className="flex flex-wrap gap-1">
             {selected.map((color) => {
@@ -31,12 +31,12 @@ export function LabelDropdown({ selected, onToggle }: { selected: string[]; onTo
             })}
           </div>
         )}
-        <svg className="ml-auto shrink-0 text-[#5e6c84]" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        <svg className="ml-auto shrink-0 text-[var(--c-t3)]" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
       </button>
 
       {open && (
-        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-52 overflow-y-auto rounded-lg bg-white p-2 shadow-xl ring-1 ring-black/10">
-          <p className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-wide text-[#5e6c84]">Labels</p>
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-52 overflow-y-auto rounded-lg bg-[var(--c-card)] p-2 shadow-xl ring-1 ring-black/10">
+          <p className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--c-t3)]">Labels</p>
           {LABEL_COLORS.map((label) => {
             const isSelected = selected.includes(label.key);
             return (

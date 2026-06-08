@@ -10,7 +10,7 @@ export function DroppableColumn({ list, children }: { list: BoardList; children:
     <div
       ref={setNodeRef}
       className={`flex w-[272px] shrink-0 snap-start flex-col rounded-xl transition-colors ${
-        isOver ? "bg-[#dcdfe4]" : "bg-[#f1f2f4]"
+        isOver ? "bg-[var(--c-col-over)]" : "bg-[var(--c-col)]"
       }`}
     >
       {children}

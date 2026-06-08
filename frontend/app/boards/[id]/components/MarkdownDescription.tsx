@@ -4,17 +4,17 @@ import { useState, useEffect } from "react";
 import ReactMarkdown, { Components } from "react-markdown";
 
 const mdComponents: Components = {
-  h1: ({ children }) => <p className="mb-0.5 text-sm font-bold text-[#172b4d]">{children}</p>,
-  h2: ({ children }) => <p className="mb-0.5 text-sm font-semibold text-[#172b4d]">{children}</p>,
-  h3: ({ children }) => <p className="mb-0.5 text-xs font-semibold uppercase tracking-wide text-[#44546f]">{children}</p>,
-  p: ({ children }) => <p className="mb-1 text-sm text-[#172b4d] last:mb-0">{children}</p>,
-  ul: ({ children }) => <ul className="mb-1 list-disc pl-4 text-sm text-[#172b4d] space-y-0.5">{children}</ul>,
-  ol: ({ children }) => <ol className="mb-1 list-decimal pl-4 text-sm text-[#172b4d] space-y-0.5">{children}</ol>,
+  h1: ({ children }) => <p className="mb-0.5 text-sm font-bold text-[var(--c-t1)]">{children}</p>,
+  h2: ({ children }) => <p className="mb-0.5 text-sm font-semibold text-[var(--c-t1)]">{children}</p>,
+  h3: ({ children }) => <p className="mb-0.5 text-xs font-semibold uppercase tracking-wide text-[var(--c-t2)]">{children}</p>,
+  p: ({ children }) => <p className="mb-1 text-sm text-[var(--c-t1)] last:mb-0">{children}</p>,
+  ul: ({ children }) => <ul className="mb-1 list-disc pl-4 text-sm text-[var(--c-t1)] space-y-0.5">{children}</ul>,
+  ol: ({ children }) => <ol className="mb-1 list-decimal pl-4 text-sm text-[var(--c-t1)] space-y-0.5">{children}</ol>,
   li: ({ children }) => <li>{children}</li>,
   strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
   em: ({ children }) => <em className="italic">{children}</em>,
-  code: ({ children }) => <code className="rounded bg-black/10 px-1 py-0.5 font-mono text-xs">{children}</code>,
-  blockquote: ({ children }) => <blockquote className="border-l-2 border-[#0052cc] pl-2 italic text-[#5e6c84]">{children}</blockquote>,
+  code: ({ children }) => <code className="rounded bg-black/15 px-1 py-0.5 font-mono text-xs text-[var(--c-t1)]">{children}</code>,
+  blockquote: ({ children }) => <blockquote className="border-l-2 border-[#0052cc] pl-2 italic text-[var(--c-t3)]">{children}</blockquote>,
 };
 
 declare global {
@@ -81,11 +81,11 @@ export function MarkdownDescription({
     <div>
       <div className="mb-1.5 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <svg className="text-[#44546f]" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg className="text-[var(--c-t2)]" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/>
             <line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/>
           </svg>
-          <h3 className="text-sm font-semibold text-[#172b4d]">Description</h3>
+          <h3 className="text-sm font-semibold text-[var(--c-t1)]">Description</h3>
         </div>
         <div className="flex items-center gap-1">
           {aiAvailable && editing && (
@@ -101,7 +101,7 @@ export function MarkdownDescription({
           )}
           <button
             onClick={() => setEditing((e) => !e)}
-            className="rounded px-2 py-0.5 text-[11px] font-medium text-[#5e6c84] hover:bg-[#ebecf0]"
+            className="rounded px-2 py-0.5 text-[11px] font-medium text-[var(--c-t3)] hover:bg-[var(--c-field)]"
           >
             {editing ? "Preview" : "Edit"}
           </button>
@@ -114,17 +114,17 @@ export function MarkdownDescription({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="Add a description... (supports **markdown**)"
-          className="h-32 w-full resize-none rounded-lg bg-[#ebecf0] px-3 py-2 font-mono text-sm text-[#172b4d] placeholder-[#8590a2] outline-none hover:bg-[#dfe1e6] focus:bg-white focus:ring-2 focus:ring-[#0052cc]"
+          className="h-32 w-full resize-none rounded-lg bg-[var(--c-field)] px-3 py-2 font-mono text-sm text-[var(--c-t1)] placeholder-[var(--c-t4)] outline-none hover:bg-[var(--c-field-h)] focus:bg-[var(--c-card)] focus:ring-2 focus:ring-[#0052cc]"
         />
       ) : (
         <div
           onClick={() => setEditing(true)}
-          className="h-32 cursor-text overflow-y-auto rounded-lg bg-[#ebecf0] px-3 py-2 hover:bg-[#dfe1e6]"
+          className="h-32 cursor-text overflow-y-auto rounded-lg bg-[var(--c-field)] px-3 py-2 hover:bg-[var(--c-field-h)]"
         >
           {value ? (
             <ReactMarkdown components={mdComponents}>{value}</ReactMarkdown>
           ) : (
-            <span className="text-sm text-[#8590a2]">Add a description... (click to edit)</span>
+            <span className="text-sm text-[var(--c-t4)]">Add a description... (click to edit)</span>
           )}
         </div>
       )}
