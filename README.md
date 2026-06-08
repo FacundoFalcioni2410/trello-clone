@@ -76,11 +76,17 @@ cd frontend && npm run dev
 
 ## Test Credentials
 
-No database seeding required — all data (users, boards, cards) is created through the UI. Register an account at http://localhost:3000/login on first run.
+Run the seeder to create a ready-to-use test account:
 
-Example test user (register it manually):
+```bash
+cd backend
+php artisan db:seed
+```
+
 - Email: `test@example.com`
 - Password: `password`
+
+Alternatively, register any account via the UI at http://localhost:3000/login.
 
 ## Testing
 
