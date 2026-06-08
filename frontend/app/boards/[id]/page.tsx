@@ -23,13 +23,14 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { LabelPicker } from "./components/LabelPicker";
+import { LabelDropdown } from "./components/LabelDropdown";
+import { MarkdownDescription } from "./components/MarkdownDescription";
 import { StatusPicker } from "./components/StatusPicker";
-import { StatusBadge } from "./components/StatusBadge";
 import { SortableCard } from "./components/SortableCard";
+import { CardPreview } from "./components/CardPreview";
 import { DroppableColumn } from "./components/DroppableColumn";
 import { Board, Card, CardStatus, BoardList, ChecklistItem, User } from "./components/types";
-import { formatDate, isOverdue } from "./components/utils";
+import { formatDate, isOverdue, STATUS_CONFIG } from "./components/utils";
 
 async function mutate(path: string, options: RequestInit = {}) {
   await getCsrfCookie();
@@ -58,12 +59,13 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
   const [newListName, setNewListName] = useState("");
   const [addingList, setAddingList] = useState(false);
   const [creatingList, setCreatingList] = useState(false);
-  const [newCardTitles, setNewCardTitles] = useState<Record<number, string>>({});
-  const [newCardDescriptions, setNewCardDescriptions] = useState<Record<number, string>>({});
-  const [newCardDueDates, setNewCardDueDates] = useState<Record<number, string>>({});
-  const [newCardLabels, setNewCardLabels] = useState<Record<number, string[]>>({});
-  const [newCardStatuses, setNewCardStatuses] = useState<Record<number, string>>({});
-  const [newCardParentIds, setNewCardParentIds] = useState<Record<number, number | null>>({});
+  const [createCardList, setCreateCardList] = useState<BoardList | null>(null);
+  const [createTitle, setCreateTitle] = useState("");
+  const [createDescription, setCreateDescription] = useState("");
+  const [createDueDate, setCreateDueDate] = useState("");
+  const [createLabels, setCreateLabels] = useState<string[]>([]);
+  const [createStatus, setCreateStatus] = useState("todo");
+  const [createParentId, setCreateParentId] = useState<number | null>(null);
   const [creatingCardListId, setCreatingCardListId] = useState<number | null>(null);
   const [editingListId, setEditingListId] = useState<number | null>(null);
   const [editListName, setEditListName] = useState("");
@@ -146,6 +148,17 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [board?.id]);
 
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      if (selectedCard) { setSelectedCard(null); return; }
+      if (createCardList) { setCreateCardList(null); return; }
+      if (showMembers) { setShowMembers(false); return; }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [selectedCard, createCardList, showMembers]);
+
   async function refreshBoard() {
     if (!board) return;
     try {
@@ -181,28 +194,37 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
     }
   }
 
-  async function handleCreateCard(listId: number) {
-    if (!board || !newCardTitles[listId]?.trim()) return;
-    setCreatingCardListId(listId);
+  function openCreateModal(list: BoardList) {
+    setCreateCardList(list);
+    setCreateTitle("");
+    setCreateDescription("");
+    setCreateDueDate("");
+    setCreateLabels([]);
+    setCreateStatus("todo");
+    setCreateParentId(null);
+  }
+
+  function closeCreateModal() {
+    setCreateCardList(null);
+  }
+
+  async function handleCreateCard() {
+    if (!board || !createCardList || !createTitle.trim()) return;
+    setCreatingCardListId(createCardList.id);
     try {
-      await mutate(`/api/boards/${board.id}/lists/${listId}/cards`, {
+      await mutate(`/api/boards/${board.id}/lists/${createCardList.id}/cards`, {
         method: "POST",
         body: JSON.stringify({
-          title: newCardTitles[listId].trim(),
-          description: newCardDescriptions[listId]?.trim() || null,
-          due_date: newCardDueDates[listId] || null,
-          labels: newCardLabels[listId] || null,
-          status: newCardStatuses[listId] || "todo",
-          parent_id: newCardParentIds[listId] ?? null,
+          title: createTitle.trim(),
+          description: createDescription.trim() || null,
+          due_date: createDueDate || null,
+          labels: createLabels.length > 0 ? createLabels : null,
+          status: createStatus || "todo",
+          parent_id: createParentId ?? null,
         }),
       });
       await refreshBoard();
-      setNewCardTitles((prev) => ({ ...prev, [listId]: "" }));
-      setNewCardDescriptions((prev) => ({ ...prev, [listId]: "" }));
-      setNewCardDueDates((prev) => ({ ...prev, [listId]: "" }));
-      setNewCardLabels((prev) => ({ ...prev, [listId]: [] }));
-      setNewCardStatuses((prev) => ({ ...prev, [listId]: "" }));
-      setNewCardParentIds((prev) => ({ ...prev, [listId]: null }));
+      closeCreateModal();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create card");
     } finally {
@@ -291,6 +313,25 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
       setError(err instanceof Error ? err.message : "Failed to delete card");
     } finally {
       setDeletingCardId(null);
+    }
+  }
+
+  async function handleUpdateSubtaskStatus(child: Card, status: string) {
+    if (!board) return;
+    const childList = board.lists.find((l) => l.cards.some((c) => c.id === child.id));
+    if (!childList) return;
+    setBoard((prev) =>
+      replaceCardInBoard(prev, child.id, (c) => ({ ...c, status: status as CardStatus }))
+    );
+    try {
+      await mutate(`/api/boards/${board.id}/lists/${childList.id}/cards/${child.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ status }),
+      });
+      await refreshBoard();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update subtask status");
+      refreshBoard();
     }
   }
 
@@ -563,39 +604,40 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
   };
 
   return (
-    <div className="flex h-screen flex-col" style={{ backgroundColor: bg }}>
-      <header className="shrink-0 bg-black/15 px-6 py-3 backdrop-blur-md">
-        <div className="mx-auto flex max-w-[90rem] items-center justify-between">
-          <div className="flex items-center gap-4">
+    <div className="flex h-[100dvh] flex-col overflow-hidden" style={{ backgroundColor: bg }}>
+      <header className="shrink-0 bg-black/25 px-3 py-2 sm:px-4 backdrop-blur-sm">
+        <div className="flex items-center justify-between gap-2 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0">
             <button
               onClick={() => router.push("/")}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-white/90 transition-all hover:bg-white/20 hover:text-white"
+              className="flex shrink-0 items-center gap-1 rounded px-1.5 py-1 text-xs font-medium text-white/60 transition hover:bg-white/15 hover:text-white/90"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
               Boards
             </button>
-            <div className="h-5 w-px bg-white/20" />
-            <h1 className="text-lg font-bold text-white drop-shadow-sm">{board?.name || "Board"}</h1>
+            <span className="shrink-0 text-[10px] text-white/25">/</span>
+            <h1 className="truncate text-sm font-bold text-white">{board?.name || "Board"}</h1>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 shrink-0">
             <button
               onClick={() => setShowMembers(true)}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-white/90 transition-all hover:bg-white/20 hover:text-white"
+              className="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs font-semibold text-white/80 transition hover:bg-white/20 hover:text-white"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-              Members
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <span className="hidden sm:inline">Members</span>
             </button>
             <button
               onClick={handleLogout}
-              className="rounded-lg px-3 py-1.5 text-sm font-medium text-white/80 transition-all hover:bg-white/20 hover:text-white"
+              className="rounded px-2.5 py-1.5 text-xs font-semibold text-white/70 transition hover:bg-white/20 hover:text-white"
             >
-              Log out
+              <span className="hidden sm:inline">Log out</span>
+              <svg className="sm:hidden" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
             </button>
           </div>
         </div>
       </header>
 
-      <main className="relative flex-1 overflow-x-auto overflow-y-hidden">
+      <main className="relative flex-1 overflow-x-auto overflow-y-hidden min-w-0">
         {error && !loading && (
           <div className="absolute left-6 right-6 top-5 z-10 flex items-center justify-between rounded-xl bg-red-500/90 px-4 py-3 text-sm text-white shadow-lg backdrop-blur-sm">
             <span>{error}</span>
@@ -624,10 +666,11 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
           >
-            <div className="flex h-full items-start gap-4 px-6 py-5">
+            <div className="flex h-full items-start gap-3 sm:gap-4 px-3 py-3 sm:px-6 sm:py-5 overflow-x-auto snap-x snap-mandatory scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
               {board.lists.map((list) => (
                 <DroppableColumn key={list.id} list={list}>
-                  <div className="flex items-center justify-between px-4 pt-4 pb-2">
+                  {/* Column header */}
+                  <div className="flex items-center gap-1 px-3 pt-3 pb-2">
                     {editingListId === list.id ? (
                       <input
                         type="text"
@@ -639,164 +682,122 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
                           if (e.key === "Escape") setEditingListId(null);
                         }}
                         autoFocus
-                        className="flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm font-semibold text-zinc-800 outline-none ring-2 ring-blue-500/30 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                        className="flex-1 rounded bg-white px-2 py-1 text-sm font-bold text-[#172b4d] outline-none ring-2 ring-[#0052cc]"
                       />
                     ) : (
                       <h3
                         onClick={() => { setEditingListId(list.id); setEditListName(list.name); }}
-                        className="cursor-pointer flex-1 select-none text-sm font-bold tracking-tight text-zinc-700 dark:text-zinc-200"
+                        className="flex-1 cursor-pointer select-none rounded px-2 py-1 text-sm font-bold text-[#172b4d] hover:bg-black/5"
                       >
                         {list.name}
                       </h3>
                     )}
-                    <span className="ml-2 rounded-full bg-zinc-200/80 px-2 py-0.5 text-[10px] font-bold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-                      {list.cards.length}
-                    </span>
                     <button
                       onClick={() => handleDeleteList(list.id)}
                       disabled={deletingListId === list.id}
-                      className="ml-2 rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-200 hover:text-red-500 dark:hover:bg-zinc-800"
+                      className="flex h-7 w-7 items-center justify-center rounded text-[#44546f] transition-colors hover:bg-black/10"
                       title="Delete list"
                     >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                     </button>
                   </div>
 
-                  <div className="flex flex-col gap-2.5 px-3 pb-3">
+                  {/* Cards */}
+                  <div className="flex flex-col gap-2 px-2 overflow-y-auto max-h-[calc(100vh-220px)] scrollbar-thin scrollbar-thumb-[#c1c7d0] scrollbar-track-transparent">
                     <SortableContext
-                      items={list.cards.map((c) => c.id)}
+                      items={list.cards.filter((c) => !c.parent_id).map((c) => c.id)}
                       strategy={verticalListSortingStrategy}
                     >
-                      {list.cards.map((card) => (
-                        <SortableCard
-                          key={card.id}
-                          card={card}
-                          onClick={(c) => {
-                            setSelectedCard({ list, card: c });
-                            setEditCardTitle(c.title);
-                            setEditCardDescription(c.description || "");
-                            setEditCardDueDate(c.due_date || "");
-                            setEditCardLabels(c.labels || []);
-                            setEditCardStatus(c.status || "todo");
-                            setEditCardParentId(c.parent_id ?? null);
-                            setChecklistItems(c.checklist_items || []);
-                          }}
-                        />
+                      {list.cards.filter((c) => !c.parent_id).map((card) => (
+                        <div key={card.id} className="flex flex-col gap-1">
+                          <SortableCard
+                            card={card}
+                            onClick={(c) => {
+                              setSelectedCard({ list, card: c });
+                              setEditCardTitle(c.title);
+                              setEditCardDescription(c.description || "");
+                              setEditCardDueDate(c.due_date || "");
+                              setEditCardLabels(c.labels || []);
+                              setEditCardStatus(c.status || "todo");
+                              setEditCardParentId(c.parent_id ?? null);
+                              setChecklistItems(c.checklist_items || []);
+                            }}
+                          />
+                          {card.children && card.children.length > 0 && (
+                            <div className="flex flex-col gap-1 ml-2 pl-2 border-l-2 border-[#c1c7d0]">
+                              {card.children.map((child) => (
+                                <CardPreview
+                                  key={child.id}
+                                  card={child}
+                                  onClick={(c) => {
+                                    setSelectedCard({ list, card: c });
+                                    setEditCardTitle(c.title);
+                                    setEditCardDescription(c.description || "");
+                                    setEditCardDueDate(c.due_date || "");
+                                    setEditCardLabels(c.labels || []);
+                                    setEditCardStatus(c.status || "todo");
+                                    setEditCardParentId(c.parent_id ?? null);
+                                    setChecklistItems(c.checklist_items || []);
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       ))}
-                      {list.cards.length === 0 && (
-                        <div className="rounded-xl border-2 border-dashed border-zinc-300/60 py-8 text-center text-xs text-zinc-400 dark:border-zinc-700/60 dark:text-zinc-500">
+                      {list.cards.filter((c) => !c.parent_id).length === 0 && (
+                        <div className="rounded-lg border-2 border-dashed border-[#c1c7d0] py-6 text-center text-xs text-[#8590a2]">
                           Drop cards here
                         </div>
                       )}
                     </SortableContext>
+                  </div>
 
-                    <div className="mt-1 rounded-xl bg-white p-3 shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-800 dark:ring-zinc-700">
-                      <input
-                        type="text"
-                        value={newCardTitles[list.id] || ""}
-                        onChange={(e) => setNewCardTitles((prev) => ({ ...prev, [list.id]: e.target.value }))}
-                        placeholder="Enter a title for this card..."
-                        className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 placeholder-zinc-400 outline-none transition-all focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white dark:focus:ring-blue-900/30"
-                      />
-                      {(newCardTitles[list.id]?.trim()) && (
-                        <>
-                          <textarea
-                            value={newCardDescriptions[list.id] || ""}
-                            onChange={(e) => setNewCardDescriptions((prev) => ({ ...prev, [list.id]: e.target.value }))}
-                            placeholder="Description (optional)"
-                            rows={2}
-                            className="mt-2 w-full resize-none rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700 placeholder-zinc-400 outline-none transition-all focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:focus:ring-blue-900/30"
-                          />
-                          <div className="relative mt-2">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"><path d="M18 6H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2z"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
-                            <input
-                              type="date"
-                              value={newCardDueDates[list.id] || ""}
-                              onChange={(e) => setNewCardDueDates((prev) => ({ ...prev, [list.id]: e.target.value }))}
-                              className="w-full rounded-lg border border-zinc-200 bg-zinc-50 py-2 pl-8 pr-3 text-xs text-zinc-700 outline-none transition-all focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:focus:ring-blue-900/30"
-                            />
-                          </div>
-                          <div className="mt-2">
-                            <LabelPicker
-                              selected={newCardLabels[list.id] || []}
-                              onToggle={(color) => {
-                                setNewCardLabels((prev) => {
-                                  const current = prev[list.id] || [];
-                                  const next = current.includes(color) ? current.filter((c) => c !== color) : [...current, color];
-                                  return { ...prev, [list.id]: next };
-                                });
-                              }}
-                            />
-                          </div>
-                          <div className="mt-2">
-                            <StatusPicker
-                              selected={newCardStatuses[list.id] || "todo"}
-                              onChange={(status) => {
-                                setNewCardStatuses((prev) => ({ ...prev, [list.id]: status }));
-                              }}
-                            />
-                          </div>
-                          <div className="mt-2">
-                            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Parent</label>
-                            <select
-                              value={newCardParentIds[list.id] || ""}
-                              onChange={(e) => setNewCardParentIds((prev) => ({ ...prev, [list.id]: e.target.value ? Number(e.target.value) : null }))}
-                              className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-800 outline-none transition-all focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white dark:focus:ring-blue-900/30"
-                            >
-                              <option value="">No parent (top-level)</option>
-                              {list.cards.filter((c) => !c.parent_id).map((c) => (
-                                <option key={c.id} value={c.id}>{c.title}</option>
-                              ))}
-                            </select>
-                          </div>
-                        </>
-                      )}
-                      <button
-                        onClick={() => handleCreateCard(list.id)}
-                        disabled={creatingCardListId === list.id || !newCardTitles[list.id]?.trim()}
-                        className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-600 py-2.5 text-xs font-bold text-white shadow-md shadow-blue-600/20 transition-all hover:bg-blue-500 active:scale-[0.98] disabled:opacity-40"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                        {creatingCardListId === list.id ? "Adding..." : "Add card"}
-                      </button>
-                    </div>
+                  {/* Add card */}
+                  <div className="p-2">
+                    <button
+                      onClick={() => openCreateModal(list)}
+                      className="flex w-full items-center gap-1.5 rounded-lg px-2 py-2 text-sm text-[#44546f] transition-colors hover:bg-black/10 hover:text-[#172b4d]"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                      Add a card
+                    </button>
                   </div>
                 </DroppableColumn>
               ))}
 
-              <div className="w-80 shrink-0">
+              <div className="w-[272px] shrink-0 snap-start">
                 {addingList ? (
-                  <form onSubmit={handleCreateList} className="rounded-2xl bg-white/85 p-4 shadow-xl backdrop-blur-xl dark:bg-zinc-900/85">
+                  <form onSubmit={handleCreateList} className="rounded-xl bg-[#f1f2f4] p-2">
                     <input
                       type="text"
                       value={newListName}
                       onChange={(e) => setNewListName(e.target.value)}
                       placeholder="Enter list title..."
                       autoFocus
-                      className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm font-medium text-zinc-800 placeholder-zinc-400 outline-none ring-2 ring-transparent transition-all focus:border-blue-400 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:focus:ring-blue-900/30"
+                      className="w-full rounded bg-white px-2 py-1.5 text-sm font-medium text-[#172b4d] placeholder-[#8590a2] outline-none ring-2 ring-[#0052cc]"
                     />
-                    <div className="mt-3 flex gap-2">
+                    <div className="mt-2 flex items-center gap-2">
                       <button
                         type="submit"
                         disabled={creatingList || !newListName.trim()}
-                        className="flex items-center gap-1.5 rounded-xl bg-zinc-900 px-4 py-2 text-xs font-bold text-white transition-all hover:bg-zinc-800 active:scale-[0.97] disabled:opacity-40 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+                        className="rounded bg-[#0052cc] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#0065ff] disabled:opacity-50"
                       >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
                         {creatingList ? "Adding..." : "Add list"}
                       </button>
                       <button
                         type="button"
                         onClick={() => { setAddingList(false); setNewListName(""); }}
-                        className="rounded-xl px-4 py-2 text-xs font-semibold text-zinc-600 transition-colors hover:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                        className="rounded p-1.5 text-[#44546f] hover:bg-black/10"
                       >
-                        Cancel
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                       </button>
                     </div>
                   </form>
                 ) : (
                   <button
                     onClick={() => { setAddingList(true); setError(""); }}
-                    className="flex w-full items-center gap-2 rounded-2xl bg-white/20 px-5 py-3.5 text-left text-sm font-semibold text-white backdrop-blur-md transition-all hover:bg-white/30 hover:shadow-lg"
+                    className="flex w-full items-center gap-2 rounded-xl bg-white/20 px-4 py-3 text-left text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/30"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
                     Add another list
@@ -807,8 +808,8 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
 
             <DragOverlay dropAnimation={dropAnimation}>
               {activeDragCard ? (
-                <div className="rounded-xl bg-white p-3.5 shadow-2xl ring-1 ring-zinc-200 opacity-90 dark:bg-zinc-800 dark:ring-zinc-700">
-                  <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{activeDragCard.title}</p>
+                <div className="rounded-lg bg-white shadow-2xl opacity-90 px-3 py-2">
+                  <p className="text-sm text-[#172b4d]">{activeDragCard.title}</p>
                 </div>
               ) : null}
             </DragOverlay>
@@ -817,9 +818,9 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
       </main>
 
       {showMembers && board && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onClick={() => setShowMembers(false)}>
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-5 flex items-start justify-between">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 sm:p-4 backdrop-blur-sm" onClick={() => setShowMembers(false)}>
+          <div className="w-full h-full sm:h-auto sm:max-w-md rounded-none sm:rounded-3xl bg-white p-4 sm:p-6 shadow-2xl dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 sm:mb-5 flex items-start justify-between">
               <div>
                 <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Board members</h2>
                 <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">Manage who has access to this board</p>
@@ -892,154 +893,343 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
       )}
 
       {selectedCard && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onClick={() => setSelectedCard(null)}>
-          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-5 flex items-start justify-between">
-              <div>
-                <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Card details</h2>
-                <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">in list <span className="font-semibold text-zinc-700 dark:text-zinc-300">{selectedCard.list.name}</span></p>
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:p-8"
+          onClick={() => setSelectedCard(null)}
+        >
+          <div
+            className="relative my-auto w-full max-w-2xl rounded-xl bg-[#f4f5f7] shadow-2xl max-h-[85vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close */}
+            <button
+              onClick={() => setSelectedCard(null)}
+              className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg text-[#44546f] hover:bg-black/10"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+
+            {/* Title area */}
+            <div className="flex items-start gap-3 px-5 pt-5 pb-2">
+              <svg className="mt-1 shrink-0 text-[#44546f]" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+              <div className="flex-1 min-w-0 pr-8">
+                <textarea
+                  value={editCardTitle}
+                  onChange={(e) => setEditCardTitle(e.target.value)}
+                  rows={1}
+                  className="w-full resize-none rounded bg-transparent px-1 py-0.5 text-lg font-bold text-[#172b4d] outline-none hover:bg-white/70 focus:bg-white focus:ring-2 focus:ring-[#0052cc]"
+                />
+                <span className="mt-1 inline-flex items-center rounded bg-[#ebecf0] px-2 py-0.5 text-xs font-medium text-[#44546f]">
+                  {selectedCard.list.name}
+                </span>
               </div>
-              <button onClick={() => setSelectedCard(null)} className="rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-white">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-              </button>
             </div>
 
-            <div className="space-y-5">
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Title</label>
-                <input type="text" value={editCardTitle} onChange={(e) => setEditCardTitle(e.target.value)} className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm font-medium text-zinc-800 outline-none ring-2 ring-transparent transition-all focus:border-blue-400 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:focus:ring-blue-900/30" />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Description</label>
-                <textarea value={editCardDescription} onChange={(e) => setEditCardDescription(e.target.value)} placeholder="Add a more detailed description..." rows={5} className="w-full resize-none rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700 outline-none ring-2 ring-transparent transition-all focus:border-blue-400 focus:ring-blue-100 placeholder-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:focus:ring-blue-900/30" />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Due date</label>
-                <input type="date" value={editCardDueDate} onChange={(e) => setEditCardDueDate(e.target.value)} className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-800 outline-none ring-2 ring-transparent transition-all focus:border-blue-400 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:focus:ring-blue-900/30" />
-                {isOverdue(editCardDueDate) && <p className="mt-1 text-xs font-medium text-red-500">This card is overdue</p>}
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Labels</label>
-                <LabelPicker
-                  selected={editCardLabels}
-                  onToggle={(color) => {
-                    setEditCardLabels((prev) =>
-                      prev.includes(color) ? prev.filter((c) => c !== color) : [...prev, color]
-                    );
-                  }}
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Status</label>
-                <StatusPicker
-                  selected={editCardStatus}
-                  onChange={(status) => setEditCardStatus(status)}
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Parent</label>
-                <select
-                  value={editCardParentId ?? ""}
-                  onChange={(e) => setEditCardParentId(e.target.value ? Number(e.target.value) : null)}
-                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-800 outline-none ring-2 ring-transparent transition-all focus:border-blue-400 focus:ring-blue-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:focus:ring-blue-900/30"
-                >
-                  <option value="">No parent (top-level)</option>
-                  {selectedCard.list.cards
-                    .filter((c) => c.id !== selectedCard.card.id && !c.parent_id)
-                    .map((c) => (
-                      <option key={c.id} value={c.id}>{c.title}</option>
-                    ))}
-                </select>
-              </div>
-              {(selectedCard.card.children?.length ?? 0) > 0 && (
+            {/* Two-column body */}
+            <div className="flex flex-col sm:flex-row gap-4 px-4 pb-5">
+              {/* Left: main content */}
+              <div className="flex-1 min-w-0 space-y-5">
+                {/* Description */}
+                <MarkdownDescription value={editCardDescription} onChange={setEditCardDescription} cardTitle={editCardTitle} />
+
+                {/* Checklist */}
                 <div>
-                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Subtasks</label>
-                  <div className="space-y-2">
-                    {(selectedCard.card.children || []).map((child) => (
-                      <div key={child.id} className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800">
-                        <StatusBadge status={child.status} />
-                        <span className="flex-1 text-sm text-zinc-800 dark:text-zinc-200">{child.title}</span>
-                        {child.due_date && (
-                          <span className="text-[10px] text-zinc-500 dark:text-zinc-400">{formatDate(child.due_date)}</span>
-                        )}
-                      </div>
-                    ))}
+                  <div className="mb-2 flex items-center gap-2">
+                    <svg className="text-[#44546f]" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                    <h3 className="text-sm font-semibold text-[#172b4d]">Checklist</h3>
                   </div>
-                </div>
-              )}
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Checklist</label>
-                <div className="space-y-2">
-                  {checklistItems.map((item) => (
-                    <div key={item.id} className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800">
-                      <button
-                        onClick={() => handleToggleChecklistItem(item)}
-                        className={`shrink-0 rounded-md border p-1 transition-colors ${item.completed ? "border-green-500 bg-green-500 text-white" : "border-zinc-300 bg-white text-transparent hover:border-zinc-400 dark:border-zinc-600 dark:bg-zinc-700"}`}
-                      >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-                      </button>
-                      <span className={`flex-1 text-sm ${item.completed ? "text-zinc-400 line-through" : "text-zinc-800 dark:text-zinc-200"}`}>{item.text}</span>
-                      <button
-                        onClick={() => handleDeleteChecklistItem(item.id)}
-                        className="rounded-md p-1 text-zinc-400 hover:bg-zinc-200 hover:text-red-500 dark:hover:bg-zinc-700"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                      </button>
-                    </div>
-                  ))}
-                  <div className="flex items-center gap-2">
+                  {checklistItems.length > 0 && (
+                    <>
+                      <div className="mb-3 flex items-center gap-2">
+                        <span className="w-7 text-right text-[10px] text-[#5e6c84]">
+                          {Math.round((checklistItems.filter((i) => i.completed).length / checklistItems.length) * 100)}%
+                        </span>
+                        <div className="flex-1 h-2 rounded-full bg-[#ebecf0]">
+                          <div
+                            className={`h-2 rounded-full transition-all ${checklistItems.filter((i) => i.completed).length === checklistItems.length ? "bg-green-500" : "bg-[#0052cc]"}`}
+                            style={{ width: `${(checklistItems.filter((i) => i.completed).length / checklistItems.length) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-0.5">
+                        {checklistItems.map((item) => (
+                          <div key={item.id} className="group flex items-center gap-2 rounded px-1 py-1 hover:bg-[#ebecf0]">
+                            <button
+                              onClick={() => handleToggleChecklistItem(item)}
+                              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${item.completed ? "border-[#0052cc] bg-[#0052cc]" : "border-[#8590a2] bg-white hover:border-[#0052cc]"}`}
+                            >
+                              {item.completed && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>}
+                            </button>
+                            <span className={`flex-1 text-sm ${item.completed ? "text-[#5e6c84] line-through" : "text-[#172b4d]"}`}>{item.text}</span>
+                            <button
+                              onClick={() => handleDeleteChecklistItem(item.id)}
+                              className="hidden rounded p-0.5 text-[#8590a2] hover:bg-[#dfe1e6] hover:text-[#172b4d] group-hover:flex"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                  <div className="mt-2 flex gap-2">
                     <input
                       type="text"
                       value={newChecklistText}
                       onChange={(e) => setNewChecklistText(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleAddChecklistItem();
-                      }}
-                      placeholder="Add a checklist item..."
-                      className="flex-1 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 placeholder-zinc-400 outline-none transition-all focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white dark:focus:ring-blue-900/30"
+                      onKeyDown={(e) => { if (e.key === "Enter") handleAddChecklistItem(); }}
+                      placeholder="Add an item..."
+                      className="flex-1 rounded-lg bg-white px-3 py-2 text-sm text-[#172b4d] placeholder-[#8590a2] outline-none ring-1 ring-[#dfe1e6] focus:ring-2 focus:ring-[#0052cc]"
                     />
                     <button
                       onClick={handleAddChecklistItem}
                       disabled={addingChecklist || !newChecklistText.trim()}
-                      className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white transition-all hover:bg-blue-500 disabled:opacity-40"
+                      className="rounded bg-[#ebecf0] px-3 py-2 text-sm font-medium text-[#172b4d] hover:bg-[#dfe1e6] disabled:opacity-50"
                     >
                       {addingChecklist ? "..." : "Add"}
                     </button>
                   </div>
                 </div>
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Activity</label>
-                <div className="space-y-3">
-                  {(selectedCard.card.activities || []).length === 0 && (
-                    <p className="text-xs text-zinc-400 dark:text-zinc-500">No activity yet.</p>
-                  )}
-                  {(selectedCard.card.activities || []).map((activity) => (
-                    <div key={activity.id} className="flex items-start gap-2">
-                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                        {activity.user?.name?.charAt(0).toUpperCase() ?? "?"}
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-xs text-zinc-700 dark:text-zinc-300">
-                          <span className="font-semibold">{activity.user?.name ?? "Unknown"}</span>{" "}
-                          {activity.description}
-                        </p>
-                        <p className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-500">
-                          {formatDate(activity.created_at)} at {new Date(activity.created_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
-                        </p>
-                      </div>
+
+                {/* Subtasks */}
+                {(selectedCard.card.children?.length ?? 0) > 0 && (
+                  <div>
+                    <div className="mb-2 flex items-center gap-2">
+                      <svg className="text-[#44546f]" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
+                      <h3 className="text-sm font-semibold text-[#172b4d]">Subtasks</h3>
+                      <span className="text-xs text-[#5e6c84]">
+                        {selectedCard.card.children!.filter((c) => c.status === "done").length}/{selectedCard.card.children!.length}
+                      </span>
                     </div>
-                  ))}
+                    <div className="space-y-1.5">
+                      {(selectedCard.card.children || []).map((child) => (
+                        <div key={child.id} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 shadow-sm ring-1 ring-[#dfe1e6]">
+                          <button
+                            onClick={() => {
+                              setSelectedCard({ list: selectedCard.list, card: child });
+                              setEditCardTitle(child.title);
+                              setEditCardDescription(child.description || "");
+                              setEditCardDueDate(child.due_date || "");
+                              setEditCardLabels(child.labels || []);
+                              setEditCardStatus(child.status || "todo");
+                              setEditCardParentId(child.parent_id ?? null);
+                              setChecklistItems(child.checklist_items || []);
+                            }}
+                            className="flex-1 min-w-0 text-left text-sm text-[#172b4d] leading-snug hover:text-[#0052cc]"
+                          >
+                            {child.title}
+                          </button>
+                          <div className="flex shrink-0 items-center gap-1.5 rounded bg-[#ebecf0] px-1.5 py-1 hover:bg-[#dfe1e6]">
+                            <span className={`h-2 w-2 shrink-0 rounded-full ${STATUS_CONFIG[child.status || "todo"]?.dot ?? "bg-zinc-400"}`} />
+                            <select
+                              value={child.status || "todo"}
+                              onChange={(e) => handleUpdateSubtaskStatus(child, e.target.value)}
+                              className={`bg-transparent text-xs font-semibold outline-none ${STATUS_CONFIG[child.status || "todo"]?.text ?? "text-zinc-600"}`}
+                            >
+                              {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
+                                <option key={key} value={key}>{cfg.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Activity */}
+                <div>
+                  <div className="mb-2 flex items-center gap-2">
+                    <svg className="text-[#44546f]" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    <h3 className="text-sm font-semibold text-[#172b4d]">Activity</h3>
+                  </div>
+                  <div className="space-y-3">
+                    {(selectedCard.card.activities || []).length === 0 && (
+                      <p className="text-xs text-[#8590a2]">No activity yet.</p>
+                    )}
+                    {(selectedCard.card.activities || []).map((activity) => (
+                      <div key={activity.id} className="flex items-start gap-2">
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#0052cc] text-[11px] font-bold text-white">
+                          {activity.user?.name?.charAt(0).toUpperCase() ?? "?"}
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-xs text-[#172b4d]">
+                            <span className="font-semibold">{activity.user?.name ?? "Unknown"}</span>{" "}{activity.description}
+                          </p>
+                          <p className="mt-0.5 text-[10px] text-[#8590a2]">
+                            {formatDate(activity.created_at)} at {new Date(activity.created_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Save/Cancel */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleSaveCard}
+                    disabled={savingCard || !editCardTitle.trim()}
+                    className="rounded bg-[#0052cc] px-4 py-2 text-sm font-medium text-white hover:bg-[#0065ff] disabled:opacity-50"
+                  >
+                    {savingCard ? "Saving..." : "Save"}
+                  </button>
+                  <button
+                    onClick={() => setSelectedCard(null)}
+                    className="rounded px-4 py-2 text-sm text-[#172b4d] hover:bg-[#ebecf0]"
+                  >
+                    Cancel
+                  </button>
                 </div>
               </div>
-              <div className="flex items-center gap-3 pt-2">
-                <button onClick={handleSaveCard} disabled={savingCard || !editCardTitle.trim()} className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition-all hover:bg-blue-700 active:scale-[0.97] disabled:opacity-40">{savingCard ? "Saving..." : "Save changes"}</button>
-                <button onClick={() => setSelectedCard(null)} className="rounded-xl px-5 py-2.5 text-sm font-semibold text-zinc-600 transition-colors hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">Cancel</button>
-                <div className="flex-1" />
-                <button onClick={() => handleDeleteCard(selectedCard.list.id, selectedCard.card.id)} disabled={deletingCardId === selectedCard.card.id} className="flex items-center gap-1.5 rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-600 transition-colors hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                  {deletingCardId === selectedCard.card.id ? "Deleting..." : "Delete"}
-                </button>
+
+              {/* Right sidebar */}
+              <div className="sm:w-44 shrink-0 space-y-4">
+                {/* Status */}
+                <div>
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#5e6c84]">Status</p>
+                  <StatusPicker selected={editCardStatus} onChange={(status) => setEditCardStatus(status)} />
+                </div>
+
+                {/* Labels */}
+                <div>
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#5e6c84]">Labels</p>
+                  <LabelDropdown
+                    selected={editCardLabels}
+                    onToggle={(color) => setEditCardLabels((prev) => prev.includes(color) ? prev.filter((c) => c !== color) : [...prev, color])}
+                  />
+                </div>
+
+                {/* Due date */}
+                <div>
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#5e6c84]">Due date</p>
+                  <input
+                    type="date"
+                    value={editCardDueDate}
+                    onChange={(e) => setEditCardDueDate(e.target.value)}
+                    className="w-full rounded bg-[#ebecf0] px-2 py-1.5 text-sm text-[#172b4d] outline-none hover:bg-[#dfe1e6] focus:bg-white focus:ring-2 focus:ring-[#0052cc]"
+                  />
+                  {isOverdue(editCardDueDate) && <p className="mt-1 text-xs font-medium text-red-500">Overdue</p>}
+                </div>
+
+                {/* Parent */}
+                <div>
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#5e6c84]">Parent card</p>
+                  <select
+                    value={editCardParentId ?? ""}
+                    onChange={(e) => setEditCardParentId(e.target.value ? Number(e.target.value) : null)}
+                    className="w-full rounded bg-[#ebecf0] px-2 py-1.5 text-xs text-[#172b4d] outline-none hover:bg-[#dfe1e6] focus:bg-white focus:ring-2 focus:ring-[#0052cc]"
+                  >
+                    <option value="">No parent</option>
+                    {selectedCard.list.cards
+                      .filter((c) => c.id !== selectedCard.card.id && !c.parent_id)
+                      .map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
+                  </select>
+                </div>
+
+                {/* Delete */}
+                <div>
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#5e6c84]">Actions</p>
+                  <button
+                    onClick={() => handleDeleteCard(selectedCard.list.id, selectedCard.card.id)}
+                    disabled={deletingCardId === selectedCard.card.id}
+                    className="flex w-full items-center gap-2 rounded bg-[#ebecf0] px-3 py-2 text-sm text-[#172b4d] hover:bg-red-100 hover:text-red-600 disabled:opacity-50"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                    {deletingCardId === selectedCard.card.id ? "Deleting..." : "Delete card"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {createCardList && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:p-8"
+          onClick={closeCreateModal}
+        >
+          <div
+            className="relative my-auto w-full max-w-2xl rounded-xl bg-[#f4f5f7] shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={closeCreateModal}
+              className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg text-[#44546f] hover:bg-black/10"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+
+            <div className="flex items-start gap-3 px-5 pt-5 pb-2">
+              <svg className="mt-1 shrink-0 text-[#44546f]" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+              <div className="flex-1 min-w-0 pr-8">
+                <textarea
+                  autoFocus
+                  value={createTitle}
+                  onChange={(e) => setCreateTitle(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleCreateCard(); } }}
+                  placeholder="Card title..."
+                  rows={1}
+                  className="w-full resize-none rounded bg-transparent px-1 py-0.5 text-lg font-bold text-[#172b4d] placeholder-[#8590a2] outline-none hover:bg-white/70 focus:bg-white focus:ring-2 focus:ring-[#0052cc]"
+                />
+                <span className="mt-1 inline-flex items-center rounded bg-[#ebecf0] px-2 py-0.5 text-xs font-medium text-[#44546f]">
+                  {createCardList.name}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-4 px-4 pb-5">
+              <div className="flex-1 min-w-0 space-y-5">
+                <MarkdownDescription value={createDescription} onChange={setCreateDescription} cardTitle={createTitle} />
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleCreateCard}
+                    disabled={!createTitle.trim() || creatingCardListId === createCardList.id}
+                    className="rounded bg-[#0052cc] px-4 py-2 text-sm font-medium text-white hover:bg-[#0065ff] disabled:opacity-50"
+                  >
+                    {creatingCardListId === createCardList.id ? "Adding..." : "Add card"}
+                  </button>
+                  <button onClick={closeCreateModal} className="rounded px-4 py-2 text-sm text-[#172b4d] hover:bg-[#ebecf0]">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+
+              <div className="sm:w-44 shrink-0 space-y-4">
+                <div>
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#5e6c84]">Status</p>
+                  <StatusPicker selected={createStatus} onChange={setCreateStatus} />
+                </div>
+                <div>
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#5e6c84]">Labels</p>
+                  <LabelDropdown
+                    selected={createLabels}
+                    onToggle={(color) => setCreateLabels((prev) => prev.includes(color) ? prev.filter((c) => c !== color) : [...prev, color])}
+                  />
+                </div>
+                <div>
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#5e6c84]">Due date</p>
+                  <input
+                    type="date"
+                    value={createDueDate}
+                    onChange={(e) => setCreateDueDate(e.target.value)}
+                    className="w-full rounded bg-[#ebecf0] px-2 py-1.5 text-sm text-[#172b4d] outline-none hover:bg-[#dfe1e6] focus:bg-white focus:ring-2 focus:ring-[#0052cc]"
+                  />
+                </div>
+                <div>
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#5e6c84]">Parent card</p>
+                  <select
+                    value={createParentId ?? ""}
+                    onChange={(e) => setCreateParentId(e.target.value ? Number(e.target.value) : null)}
+                    className="w-full rounded bg-[#ebecf0] px-2 py-1.5 text-xs text-[#172b4d] outline-none hover:bg-[#dfe1e6] focus:bg-white focus:ring-2 focus:ring-[#0052cc]"
+                  >
+                    <option value="">No parent</option>
+                    {createCardList.cards.filter((c) => !c.parent_id).map((c) => (
+                      <option key={c.id} value={c.id}>{c.title}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
           </div>
