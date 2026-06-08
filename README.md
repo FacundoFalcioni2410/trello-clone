@@ -76,9 +76,9 @@ cd frontend && npm run dev
 
 ## Test Credentials
 
-No seeding required — users are created via the registration form at http://localhost:3000/login.
+No database seeding required — all data (users, boards, cards) is created through the UI. Register an account at http://localhost:3000/login on first run.
 
-Example test user (register it on first run):
+Example test user (register it manually):
 - Email: `test@example.com`
 - Password: `password`
 
@@ -89,6 +89,13 @@ Example test user (register it on first run):
 ```bash
 cd backend
 php artisan test --compact
+```
+
+With coverage (requires [Xdebug](https://xdebug.org/docs/install) installed and `xdebug.mode=coverage` set in `php.ini`):
+
+```bash
+cd backend
+php artisan test --coverage
 ```
 
 52 test methods across 9 test files covering:
@@ -103,7 +110,8 @@ php artisan test --compact
 
 ```bash
 cd frontend
-npm run test:unit
+npm run test:unit          # run tests
+npm run test:unit:coverage # run tests with coverage report
 ```
 
 Covers API helpers and UI components (Vitest + React Testing Library).
